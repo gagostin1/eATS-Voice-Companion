@@ -120,4 +120,6 @@ Product names and trademarks belong to their respective owners and are reference
 
 ## License
 
-No project license has been selected yet. Until a license file is added, copyright law reserves the project’s rights to its owner. Choose a license before inviting outside contributions or distributing releases.
+This project is licensed under the MIT License. See `LICENSE` for details.
+
+This license applies only to the original source code in this repository. It does not apply to eATS or any third-party software, documentation, data, or trademarks.
