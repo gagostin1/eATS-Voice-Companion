@@ -11,6 +11,8 @@ public partial class MainWindow : Window
     private readonly EatsProcessDetector _detector = new();
     private readonly MicrophoneService _microphoneService = new();
     private readonly AudioRecorder _audioRecorder = new();
+    private readonly SpeechRecognitionService
+    _speechRecognitionService = new();
 
     public MainWindow()
     {
@@ -203,31 +205,84 @@ public partial class MainWindow : Window
         _audioRecorder.Stop();
     }
 
-    private void AudioRecorder_RecordingCompleted(
+    private async void AudioRecorder_RecordingCompleted(
         object? sender,
         AudioRecordingCompletedEventArgs e)
     {
-        Dispatcher.Invoke(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
-            RecordButton.Content = "Hold to record";
-            RecordButton.IsEnabled = true;
-
             if (e.Error is not null)
             {
+                RecordButton.Content = "Hold to record";
+                RecordButton.IsEnabled = true;
+
                 RecordingStatusText.Text =
                     $"Recording failed: {e.Error.Message}";
+
+                SpeechStatusText.Text =
+                    "Speech recognition was not started.";
 
                 return;
             }
 
             RecordingStatusText.Text =
                 $"Recording saved successfully:\n{e.FilePath}";
-        });
-    }
 
-    protected override void OnClosed(EventArgs e)
-    {
-        _audioRecorder.Dispose();
-        base.OnClosed(e);
+            RecordButton.Content = "Transcribing...";
+            TranscriptText.Text = "Working...";
+            SpeechStatusText.Text =
+                "Preparing speech recognition...";
+        });
+
+        if (e.Error is not null)
+        {
+            return;
+        }
+
+        IProgress<string> progress =
+            new Progress<string>(message =>
+            {
+                Dispatcher.BeginInvoke(
+                    new Action(() =>
+                    {
+                        SpeechStatusText.Text = message;
+                    }));
+            });
+
+        try
+        {
+            string transcript =
+                await _speechRecognitionService.TranscribeAsync(
+                    e.FilePath,
+                    progress);
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                TranscriptText.Text =
+                    string.IsNullOrWhiteSpace(transcript)
+                        ? "No speech was recognized."
+                        : transcript;
+
+                SpeechStatusText.Text =
+                    "Transcription completed locally.";
+
+                RecordButton.Content = "Hold to record";
+                RecordButton.IsEnabled = true;
+            });
+        }
+        catch (Exception exception)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                TranscriptText.Text =
+                    "Transcription failed.";
+
+                SpeechStatusText.Text =
+                    exception.Message;
+
+                RecordButton.Content = "Hold to record";
+                RecordButton.IsEnabled = true;
+            });
+        }
     }
 }
