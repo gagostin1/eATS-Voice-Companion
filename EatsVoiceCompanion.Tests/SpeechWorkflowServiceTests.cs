@@ -32,6 +32,38 @@ public sealed class SpeechWorkflowServiceTests
         Assert.True(result.ContextAfterTranscription.HasFreshSnapshot);
     }
 
+    [Fact]
+    public async Task RunAsync_CancellationStopsBeforeContextRefresh()
+    {
+        DateTime now = DateTime.UtcNow;
+        CountingSnapshotService snapshots = new(
+            new EatsSnapshotData(["AAL123"], now));
+        CancelableSpeechRecognitionService speech = new();
+        RecognitionContextService context = new(
+            new RunningProcessDetector(),
+            snapshots,
+            new Dictionary<string, string>
+            {
+                ["AMERICAN"] = "AAL"
+            },
+            TimeSpan.FromMinutes(3),
+            () => now);
+        SpeechWorkflowService workflow = new(speech, context);
+
+        using CancellationTokenSource cancellation = new();
+        Task<SpeechWorkflowResult> operation = workflow.RunAsync(
+            "recording.wav",
+            "Atlanta Center",
+            cancellationToken: cancellation.Token);
+
+        await speech.Started;
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => operation);
+        Assert.Equal(1, snapshots.LoadCount);
+    }
+
     private sealed class FakeSpeechRecognitionService(string transcript)
         : ISpeechRecognitionService
     {
@@ -45,6 +77,26 @@ public sealed class SpeechWorkflowServiceTests
         {
             AdditionalPrompt = additionalPrompt;
             return Task.FromResult(transcript);
+        }
+    }
+
+    private sealed class CancelableSpeechRecognitionService
+        : ISpeechRecognitionService
+    {
+        private readonly TaskCompletionSource _started = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => _started.Task;
+
+        public async Task<string> TranscribeAsync(
+            string wavFilePath,
+            IProgress<string>? progress = null,
+            string? additionalPrompt = null,
+            CancellationToken cancellationToken = default)
+        {
+            _started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return string.Empty;
         }
     }
 

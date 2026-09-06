@@ -196,7 +196,7 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
             completePrompt += " " + additionalPrompt;
         }
 
-        using var processor =
+        await using var processor =
             whisperFactory.CreateBuilder()
                 .WithLanguage("en")
                 .WithPrompt(completePrompt)
@@ -210,8 +210,7 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
 
         await foreach (
             var segment in processor
-                .ProcessAsync(audioStream)
-                .WithCancellation(cancellationToken))
+                .ProcessAsync(audioStream, cancellationToken))
         {
             string text = segment.Text.Trim();
 
