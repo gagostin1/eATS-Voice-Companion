@@ -109,6 +109,9 @@ public partial class MainWindow : Window
                 "Direct" =>
                     EatsCommandFormatter.ProceedDirect(
                         CommandValueTextBox.Text),
+                
+                "Roger" =>
+                    EatsCommandFormatter.Roger(),    
 
                 _ => throw new InvalidOperationException(
                     "The selected instruction is not supported.")
@@ -348,7 +351,9 @@ public partial class MainWindow : Window
         try
         {
             ParsedVoiceCommand parsed =
-                _voiceCommandParser.Parse(transcript);
+                _voiceCommandParser.Parse(
+                    transcript,
+                    ControllerPositionTextBox.Text);
 
             ApplyParsedCommandToEditor(parsed);
 
@@ -399,6 +404,9 @@ public partial class MainWindow : Window
 
             VoiceInstructionType.ProceedDirect =>
                 "Direct",
+
+            VoiceInstructionType.Roger =>
+                "Roger",    
 
             _ => throw new InvalidOperationException(
                 "The instruction type is not supported.")
@@ -455,12 +463,20 @@ public partial class MainWindow : Window
 
     private string BuildRecognitionContext()
     {
+        string controllerPosition =
+            ControllerPositionTextBox.Text.Trim();
+
+        string positionContext =
+            string.IsNullOrWhiteSpace(controllerPosition)
+                ? string.Empty
+                : $"Controller position: {controllerPosition}.";
+
         try
         {
             IReadOnlyList<string> activeCallsigns =
                 _snapshotService.LoadCallsigns();
 
-            string context =
+            string airlineContext =
                 ActiveCallsignPromptBuilder.Build(
                     activeCallsigns,
                     _airlineAliases);
@@ -470,23 +486,23 @@ public partial class MainWindow : Window
                 SnapshotStatusText.Text =
                     "The snapshot contained no active aircraft.";
 
-                return string.Empty;
+                return positionContext;
             }
 
-            if (string.IsNullOrWhiteSpace(context))
+            if (string.IsNullOrWhiteSpace(airlineContext))
             {
                 SnapshotStatusText.Text =
                     $"Found {activeCallsigns.Count} active aircraft, " +
                     "but none had supported airline callsigns.";
 
-                return string.Empty;
+                return positionContext;
             }
 
             SnapshotStatusText.Text =
                 $"Loaded {activeCallsigns.Count} active aircraft. " +
                 "Dynamic airline speech context is ready.";
 
-            return context;
+            return $"{positionContext} {airlineContext}".Trim();
         }
         catch (Exception exception)
         {
@@ -494,7 +510,7 @@ public partial class MainWindow : Window
                 "Active-aircraft speech context is unavailable.\n" +
                 exception.Message;
 
-            return string.Empty;
+            return positionContext;
         }
     }
 }

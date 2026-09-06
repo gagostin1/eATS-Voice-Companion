@@ -100,6 +100,19 @@
             <GroupBox Margin="0,20,0,0"
                       Header="eATS connection">
                 <StackPanel Margin="12">
+                    <TextBlock Margin="0,0,0,5"
+                            FontWeight="SemiBold"
+                            Text="Controller position:"/>
+
+                    <TextBox x:Name="ControllerPositionTextBox"
+                            Margin="0,0,0,5"
+                            Padding="7"
+                            Text="Atlanta Center"/>
+
+                    <TextBlock Margin="0,0,0,12"
+                            Foreground="#FF555555"
+                            Text="This exact position name may appear after the aircraft callsign."
+                            TextWrapping="Wrap"/>
                     <Button Width="150"
                             Height="36"
                             HorizontalAlignment="Left"
@@ -182,6 +195,8 @@
                                       Tag="Speed"/>
                         <ComboBoxItem Content="Proceed direct"
                                       Tag="Direct"/>
+                        <ComboBoxItem Content="Roger / acknowledge"
+                                      Tag="Roger"/>           
                     </ComboBox>
 
                     <TextBlock Grid.Row="2"
