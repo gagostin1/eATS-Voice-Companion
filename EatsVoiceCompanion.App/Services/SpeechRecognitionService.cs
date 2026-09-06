@@ -8,6 +8,13 @@ namespace EatsVoiceCompanion.App.Services;
 public sealed class SpeechRecognitionService
 {
     private const string ModelFileName = "ggml-base.en.bin";
+    private const string RecognitionPrompt =
+    "Air traffic control phraseology. " +
+    "Delta one two three, turn left heading two seven zero. " +
+    "United seven one four, climb and maintain flight level two three zero. " +
+    "Fly heading. Turn right heading. " +
+    "American four five, descend and maintain one zero thousand. " +
+    "Descend and maintain. Maintain speed. Proceed direct.";
 
     public SpeechRecognitionService()
     {
@@ -107,20 +114,24 @@ public sealed class SpeechRecognitionService
         if (!File.Exists(wavFilePath))
         {
             throw new FileNotFoundException(
-                "The WAV recording could not be found.",
+                "The recording could not be found.",
                 wavFilePath);
         }
 
-        await EnsureModelAsync(progress, cancellationToken);
+        await EnsureModelAsync(
+            progress,
+            cancellationToken);
 
-        progress?.Report("Converting speech to text...");
+        progress?.Report("Transcribing recording locally...");
 
-        using WhisperFactory factory =
+        using var whisperFactory =
             WhisperFactory.FromPath(ModelPath);
 
-        using WhisperProcessor processor =
-            factory.CreateBuilder()
+        using var processor =
+            whisperFactory.CreateBuilder()
                 .WithLanguage("en")
+                .WithPrompt(RecognitionPrompt)
+                .WithSingleSegment()
                 .Build();
 
         await using FileStream audioStream =
@@ -129,11 +140,17 @@ public sealed class SpeechRecognitionService
         StringBuilder transcript = new();
 
         await foreach (
-            SegmentData segment in processor
+            var segment in processor
                 .ProcessAsync(audioStream)
                 .WithCancellation(cancellationToken))
         {
-            transcript.Append(segment.Text);
+            string text = segment.Text.Trim();
+
+            if (text.Length > 0)
+            {
+                transcript.Append(text);
+                transcript.Append(' ');
+            }
         }
 
         return transcript.ToString().Trim();

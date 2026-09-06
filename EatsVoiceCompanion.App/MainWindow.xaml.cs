@@ -3,16 +3,29 @@ using System.Windows.Controls;
 using EatsVoiceCompanion.App.Services;
 using EatsVoiceCompanion.Core.Commands;
 using System.Windows.Input;
+using EatsVoiceCompanion.Core.Speech;
 
 namespace EatsVoiceCompanion.App;
 
 public partial class MainWindow : Window
 {
+    private static readonly IReadOnlyDictionary<string, string>
+        AirlineAliases =
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                ["Delta"] = "DAL",
+                ["United"] = "UAL",
+                ["American"] = "AAL",
+                ["Air Canada"] = "ACA"
+            };
     private readonly EatsProcessDetector _detector = new();
     private readonly MicrophoneService _microphoneService = new();
     private readonly AudioRecorder _audioRecorder = new();
     private readonly SpeechRecognitionService
     _speechRecognitionService = new();
+    private readonly VoiceCommandParser _voiceCommandParser =
+        new(AirlineAliases);
 
     public MainWindow()
     {
@@ -249,26 +262,14 @@ public partial class MainWindow : Window
                     }));
             });
 
+        string transcript;
+
         try
         {
-            string transcript =
+            transcript =
                 await _speechRecognitionService.TranscribeAsync(
                     e.FilePath,
                     progress);
-
-            await Dispatcher.InvokeAsync(() =>
-            {
-                TranscriptText.Text =
-                    string.IsNullOrWhiteSpace(transcript)
-                        ? "No speech was recognized."
-                        : transcript;
-
-                SpeechStatusText.Text =
-                    "Transcription completed locally.";
-
-                RecordButton.Content = "Hold to record";
-                RecordButton.IsEnabled = true;
-            });
         }
         catch (Exception exception)
         {
@@ -280,9 +281,74 @@ public partial class MainWindow : Window
                 SpeechStatusText.Text =
                     exception.Message;
 
+                PreviewText.Text =
+                    "Command not generated.";
+
+                PreviewErrorText.Text =
+                    "Speech recognition did not complete.";
+
                 RecordButton.Content = "Hold to record";
                 RecordButton.IsEnabled = true;
             });
+
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            TranscriptText.Text =
+                string.IsNullOrWhiteSpace(transcript)
+                    ? "No speech was recognized."
+                    : transcript;
+
+            BuildVoicePreview(transcript);
+
+            RecordButton.Content = "Hold to record";
+            RecordButton.IsEnabled = true;
+        });
+    }
+
+    private void BuildVoicePreview(string transcript)
+    {
+        PreviewErrorText.Text = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            PreviewText.Text =
+                "Command not generated.";
+
+            PreviewErrorText.Text =
+                "No speech was recognized.";
+
+            SpeechStatusText.Text =
+                "Transcription completed without recognizable speech.";
+
+            return;
+        }
+
+        try
+        {
+            ParsedVoiceCommand parsed =
+                _voiceCommandParser.Parse(transcript);
+
+            PreviewText.Text =
+                parsed.ToEatsCommand();
+
+            SpeechStatusText.Text =
+                "Transcription completed and command preview generated.";
+        }
+        catch (Exception exception)
+        {
+            PreviewText.Text =
+                "Command not generated.";
+
+            PreviewErrorText.Text =
+                exception.Message;
+
+            SpeechStatusText.Text =
+                "Transcription completed, but the command " +
+                "could not be interpreted.";
         }
     }
+
 }
