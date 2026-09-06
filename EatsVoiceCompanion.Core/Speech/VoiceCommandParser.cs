@@ -58,7 +58,9 @@ public sealed class VoiceCommandParser
             new AirlineCallsignParser(airlineAliases);
     }
 
-    public ParsedVoiceCommand Parse(string transcript)
+    public ParsedVoiceCommand Parse(
+        string transcript,
+        string? controllerPosition = null)
     {
         if (string.IsNullOrWhiteSpace(transcript))
         {
@@ -68,6 +70,18 @@ public sealed class VoiceCommandParser
         }
 
         string normalized = NormalizeWords(transcript);
+
+        normalized = RemoveControllerPosition(
+            normalized,
+            controllerPosition);
+
+        ParsedVoiceCommand? acknowledgment =
+            TryParseAcknowledgment(normalized);
+
+        if (acknowledgment is not null)
+        {
+            return acknowledgment;
+        }
 
         foreach (CommandPattern pattern in Patterns)
         {
@@ -164,6 +178,80 @@ public sealed class VoiceCommandParser
             normalized,
             @"\s+",
             " ").Trim();
+    }
+
+    private ParsedVoiceCommand? TryParseAcknowledgment(
+        string normalizedTranscript)
+    {
+        string[] acknowledgmentWords =
+        {
+            "welcome",
+            "roger"
+        };
+
+        foreach (string acknowledgmentWord
+                in acknowledgmentWords)
+        {
+            string suffix =
+                " " + acknowledgmentWord;
+
+            if (!normalizedTranscript.EndsWith(
+                    suffix,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string callsignText =
+                normalizedTranscript[..^suffix.Length]
+                    .Trim();
+
+            string callsign =
+                _callsignParser.Parse(callsignText);
+
+            return new ParsedVoiceCommand(
+                callsign,
+                VoiceInstructionType.Roger);
+        }
+
+        return null;
+    }
+
+    private static string RemoveControllerPosition(
+        string normalizedTranscript,
+        string? controllerPosition)
+    {
+        if (string.IsNullOrWhiteSpace(controllerPosition))
+        {
+            return normalizedTranscript;
+        }
+
+        string normalizedPosition =
+            NormalizeWords(controllerPosition);
+
+        if (normalizedPosition.Length == 0)
+        {
+            return normalizedTranscript;
+        }
+
+        string positionWithSpaces =
+            $" {normalizedPosition} ";
+
+        int positionIndex =
+            normalizedTranscript.IndexOf(
+                positionWithSpaces,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (positionIndex <= 0)
+        {
+            return normalizedTranscript;
+        }
+
+        return normalizedTranscript
+            .Remove(
+                positionIndex,
+                positionWithSpaces.Length)
+            .Insert(positionIndex, " ");
     }
 
     private sealed record CommandPattern(

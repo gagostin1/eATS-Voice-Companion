@@ -8,5 +8,6 @@ public enum VoiceInstructionType
     ClimbAndMaintain,
     DescendAndMaintain,
     MaintainSpeed,
-    ProceedDirect
+    ProceedDirect,
+    Roger
 }

@@ -9,6 +9,9 @@ namespace EatsVoiceCompanion.App;
 
 public partial class MainWindow : Window
 {
+    private IReadOnlyDictionary<string, string>
+        _airlineAliases = FallbackAirlineAliases;  
+
     private static readonly IReadOnlyDictionary<string, string>
         FallbackAirlineAliases =
             new Dictionary<string, string>(
@@ -26,7 +29,9 @@ public partial class MainWindow : Window
         _speechRecognitionService = new();
     private readonly VoiceCommandParser _voiceCommandParser;
     private readonly EatsAirlineAliasService
-        _airlineAliasService = new();
+        _airlineAliasService = new();  
+    private readonly EatsSnapshotService
+        _snapshotService = new();
 
     public MainWindow()
     {
@@ -39,6 +44,7 @@ public partial class MainWindow : Window
             AudioRecorder_RecordingCompleted;
 
         LoadMicrophones();
+        BuildRecognitionContext();
     }
 
     private void DetectEats_Click(object sender, RoutedEventArgs e)
@@ -268,12 +274,21 @@ public partial class MainWindow : Window
 
         string transcript;
 
+        string recognitionContext = string.Empty;
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            recognitionContext =
+                BuildRecognitionContext();
+        });
+
         try
         {
             transcript =
                 await _speechRecognitionService.TranscribeAsync(
                     e.FilePath,
-                    progress);
+                    progress,
+                    recognitionContext);
         }
         catch (Exception exception)
         {
@@ -416,25 +431,70 @@ public partial class MainWindow : Window
     {
         try
         {
-            IReadOnlyDictionary<string, string> aliases =
+            _airlineAliases =
                 _airlineAliasService.Load();
 
             AirlineDataStatusText.Text =
-                $"Loaded {aliases.Count} airline callsigns from:\n" +
+                $"Loaded {_airlineAliases.Count} airline callsigns from:\n" +
                 _airlineAliasService.AirlineFilePath;
-
-            return new VoiceCommandParser(aliases);
         }
         catch (Exception exception)
         {
+            _airlineAliases =
+                FallbackAirlineAliases;
+
             AirlineDataStatusText.Text =
                 "The installed eATS airline data could not be loaded. " +
-                $"Using {FallbackAirlineAliases.Count} built-in aliases.\n" +
+                $"Using {_airlineAliases.Count} built-in aliases.\n" +
                 exception.Message;
-
-            return new VoiceCommandParser(
-                FallbackAirlineAliases);
         }
+
+        return new VoiceCommandParser(
+            _airlineAliases);
     }
 
+    private string BuildRecognitionContext()
+    {
+        try
+        {
+            IReadOnlyList<string> activeCallsigns =
+                _snapshotService.LoadCallsigns();
+
+            string context =
+                ActiveCallsignPromptBuilder.Build(
+                    activeCallsigns,
+                    _airlineAliases);
+
+            if (activeCallsigns.Count == 0)
+            {
+                SnapshotStatusText.Text =
+                    "The snapshot contained no active aircraft.";
+
+                return string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(context))
+            {
+                SnapshotStatusText.Text =
+                    $"Found {activeCallsigns.Count} active aircraft, " +
+                    "but none had supported airline callsigns.";
+
+                return string.Empty;
+            }
+
+            SnapshotStatusText.Text =
+                $"Loaded {activeCallsigns.Count} active aircraft. " +
+                "Dynamic airline speech context is ready.";
+
+            return context;
+        }
+        catch (Exception exception)
+        {
+            SnapshotStatusText.Text =
+                "Active-aircraft speech context is unavailable.\n" +
+                exception.Message;
+
+            return string.Empty;
+        }
+    }
 }

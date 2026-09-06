@@ -48,7 +48,7 @@ public sealed class VoiceCommandParserTests
         "AAL45 DM170")]
     [InlineData(
         "American four five descend and maintain one zero thousand five hundred",
-        "AAL45 DM105")]    
+        "AAL45 DM105")]
     public void Parse_BuildsExpectedEatsCommand(
         string transcript,
         string expected)
@@ -59,6 +59,41 @@ public sealed class VoiceCommandParserTests
         string result = parsed.ToEatsCommand();
 
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(
+        "American thirteen oh seven, Atlanta Center, climb and maintain flight level two three zero",
+        "AAL1307 CM230")]
+    [InlineData(
+        "American thirteen oh seven, Atlanta Center, welcome",
+        "AAL1307 R")]
+    [InlineData(
+        "American thirteen oh seven, Atlanta Center, roger",
+        "AAL1307 R")]
+    public void Parse_AcceptsControllerIdentification(
+        string transcript,
+        string expected)
+    {
+        ParsedVoiceCommand parsed =
+            _parser.Parse(
+                transcript,
+                controllerPosition: "Atlanta Center");
+
+        Assert.Equal(
+            expected,
+            parsed.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Parse_DoesNotIgnoreUnconfiguredPosition()
+    {
+        Assert.Throws<ArgumentException>(
+            () => _parser.Parse(
+                "American thirteen oh seven, " +
+                "Atlanta Center, " +
+                "climb and maintain flight level two three zero",
+                controllerPosition: "Jacksonville Center"));
     }
 
     [Theory]

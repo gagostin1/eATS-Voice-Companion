@@ -29,6 +29,14 @@ public sealed class EatsCommandFormatterTests
             "TRH220",
             EatsCommandFormatter.TurnRightHeading(220));
     }
+    [Fact]
+    public void Roger_ReturnsRogerCommand()
+    {
+        string result =
+            EatsCommandFormatter.Roger();
+
+        Assert.Equal("R", result);
+    }
 
     [Theory]
     [InlineData(3000, "CM30")]

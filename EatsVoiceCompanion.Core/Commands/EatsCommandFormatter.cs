@@ -32,6 +32,10 @@ public static class EatsCommandFormatter
             new[] { normalizedCallsign }.Concat(normalizedInstructions));
     }
 
+    public static string Roger()
+    {
+        return "R";
+    }
     public static string FlyHeading(int heading)
     {
         return $"FH{FormatHeading(heading)}";

@@ -105,6 +105,7 @@ public sealed class SpeechRecognitionService
     public async Task<string> TranscribeAsync(
         string wavFilePath,
         IProgress<string>? progress = null,
+        string? additionalPrompt = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(wavFilePath))
@@ -130,10 +131,17 @@ public sealed class SpeechRecognitionService
         using var whisperFactory =
             WhisperFactory.FromPath(ModelPath);
 
+        string completePrompt = RecognitionPrompt;
+
+        if (!string.IsNullOrWhiteSpace(additionalPrompt))
+        {
+            completePrompt += " " + additionalPrompt;
+        }    
+
         using var processor =
             whisperFactory.CreateBuilder()
                 .WithLanguage("en")
-                .WithPrompt(RecognitionPrompt)
+                .WithPrompt(completePrompt)
                 .WithSingleSegment()
                 .Build();
 

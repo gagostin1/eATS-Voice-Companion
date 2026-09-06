@@ -121,6 +121,11 @@
                             Foreground="#FF555555"
                             Text="Airline data has not been loaded."
                             TextWrapping="Wrap"/>
+                    <TextBlock x:Name="SnapshotStatusText"
+                            Margin="0,8,0,0"
+                            Foreground="#FF555555"
+                            Text="Active-aircraft context has not been loaded."
+                            TextWrapping="Wrap"/>        
                 </StackPanel>
             </GroupBox>
 

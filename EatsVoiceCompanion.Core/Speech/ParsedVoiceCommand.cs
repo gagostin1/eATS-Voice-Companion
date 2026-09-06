@@ -40,6 +40,9 @@ public sealed record ParsedVoiceCommand(
                 EatsCommandFormatter.ProceedDirect(
                     RequireTextValue()),
 
+            VoiceInstructionType.Roger =>
+                EatsCommandFormatter.Roger(),      
+
             _ => throw new InvalidOperationException(
                 "The instruction type is not supported.")
         };
