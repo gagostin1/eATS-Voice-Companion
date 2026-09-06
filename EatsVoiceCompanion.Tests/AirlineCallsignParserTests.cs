@@ -27,6 +27,10 @@ public sealed class AirlineCallsignParserTests
     [InlineData("DAL123", "DAL123")]
     [InlineData("ual 714", "UAL714")]
     [InlineData("delta tree fife zero", "DAL350")]
+    [InlineData("Delta two seventy", "DAL270")]
+    [InlineData("United seven fourteen", "UAL714")]
+    [InlineData("American five twenty one", "AAL521")]
+    [InlineData("Delta zero one zero", "DAL010")]
     public void Parse_ReturnsExpectedCallsign(
         string input,
         string expected)
@@ -38,7 +42,6 @@ public sealed class AirlineCallsignParserTests
 
     [Theory]
     [InlineData("Southwest 123")]
-    [InlineData("Delta two seventy")]
     [InlineData("Delta")]
     public void Parse_RejectsUnknownOrIncompleteCallsign(
         string input)

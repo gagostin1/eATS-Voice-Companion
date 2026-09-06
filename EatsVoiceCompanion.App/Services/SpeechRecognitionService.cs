@@ -14,6 +14,8 @@ public sealed class SpeechRecognitionService
     "United seven one four, climb and maintain flight level two three zero. " +
     "Fly heading. Turn right heading. " +
     "American four five, descend and maintain one zero thousand. " +
+    "United seven fourteen. " +
+    "American five twenty-one. " +
     "Descend and maintain. Maintain speed. Proceed direct.";
 
     public SpeechRecognitionService()

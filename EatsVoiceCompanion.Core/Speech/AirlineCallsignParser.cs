@@ -70,8 +70,8 @@ public sealed class AirlineCallsignParser
             string flightNumberText =
                 normalized[prefix.Length..];
 
-            int flightNumber =
-                AviationNumberParser.Parse(flightNumberText);
+            string flightNumber =
+                FlightNumberParser.Parse(flightNumberText);
 
             string callsign =
                 alias.Designator + flightNumber;
