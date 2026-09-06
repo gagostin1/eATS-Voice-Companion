@@ -3,6 +3,10 @@ using EatsVoiceCompanion.Core.Data;
 
 namespace EatsVoiceCompanion.App.Services;
 
+public sealed record EatsSnapshotData(
+    IReadOnlyList<string> Callsigns,
+    DateTime LastWriteTimeUtc);
+
 public sealed class EatsSnapshotService
 {
     public EatsSnapshotService()
@@ -20,7 +24,7 @@ public sealed class EatsSnapshotService
 
     public string SnapshotFilePath { get; }
 
-    public IReadOnlyList<string> LoadCallsigns()
+    public EatsSnapshotData Load()
     {
         if (!File.Exists(SnapshotFilePath))
         {
@@ -44,6 +48,14 @@ public sealed class EatsSnapshotService
             lines.Add(line);
         }
 
-        return SnapshotCallsignParser.Parse(lines);
+        IReadOnlyList<string> callsigns =
+            SnapshotCallsignParser.Parse(lines);
+
+        DateTime lastWriteTimeUtc =
+            File.GetLastWriteTimeUtc(SnapshotFilePath);
+
+        return new EatsSnapshotData(
+            callsigns,
+            lastWriteTimeUtc);
     }
 }

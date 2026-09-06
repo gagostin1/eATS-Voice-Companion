@@ -473,8 +473,39 @@ public partial class MainWindow : Window
 
         try
         {
+            if (_detector.FindRunningInstance() is null)
+            {
+                SnapshotStatusText.Text =
+                    "eATS is not running. " +
+                    "Active-aircraft context was not used.";
+
+                return positionContext;
+            }
+
+            EatsSnapshotData snapshot =
+                _snapshotService.Load();
+
+            TimeSpan snapshotAge =
+                DateTime.UtcNow -
+                snapshot.LastWriteTimeUtc;
+
+            if (snapshotAge < TimeSpan.Zero)
+            {
+                snapshotAge = TimeSpan.Zero;
+            }
+
+            if (snapshotAge > TimeSpan.FromMinutes(3))
+            {
+                SnapshotStatusText.Text =
+                    $"The eATS snapshot is stale " +
+                    $"({snapshotAge.TotalMinutes:F1} minutes old). " +
+                    "Active-aircraft context was not used.";
+
+                return positionContext;
+            }
+
             IReadOnlyList<string> activeCallsigns =
-                _snapshotService.LoadCallsigns();
+                snapshot.Callsigns;
 
             string airlineContext =
                 ActiveCallsignPromptBuilder.Build(
@@ -499,7 +530,8 @@ public partial class MainWindow : Window
             }
 
             SnapshotStatusText.Text =
-                $"Loaded {activeCallsigns.Count} active aircraft. " +
+                $"Loaded {activeCallsigns.Count} active aircraft " +
+                $"from a {snapshotAge.TotalSeconds:F0}-second-old snapshot. " +
                 "Dynamic airline speech context is ready.";
 
             return $"{positionContext} {airlineContext}".Trim();
