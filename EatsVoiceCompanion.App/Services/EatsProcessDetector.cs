@@ -9,7 +9,12 @@ public sealed record EatsProcessInfo(
     string? ExecutablePath,
     string? ProductVersion);
 
-public sealed class EatsProcessDetector
+public interface IEatsProcessDetector
+{
+    EatsProcessInfo? FindRunningInstance();
+}
+
+public sealed class EatsProcessDetector : IEatsProcessDetector
 {
     public EatsProcessInfo? FindRunningInstance()
     {

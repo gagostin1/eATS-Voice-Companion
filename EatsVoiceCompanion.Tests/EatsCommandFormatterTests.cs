@@ -87,6 +87,16 @@ public sealed class EatsCommandFormatterTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ProceedDirect_RejectsMissingFix(string? fix)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsCommandFormatter.ProceedDirect(fix!));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(361)]
     public void HeadingOutsideRange_IsRejected(int heading)

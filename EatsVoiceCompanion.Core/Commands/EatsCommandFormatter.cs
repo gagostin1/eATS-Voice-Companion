@@ -36,6 +36,7 @@ public static class EatsCommandFormatter
     {
         return "R";
     }
+
     public static string FlyHeading(int heading)
     {
         return $"FH{FormatHeading(heading)}";
@@ -75,6 +76,13 @@ public static class EatsCommandFormatter
 
     public static string ProceedDirect(string fix)
     {
+        if (string.IsNullOrWhiteSpace(fix))
+        {
+            throw new ArgumentException(
+                "A fix is required.",
+                nameof(fix));
+        }
+
         string normalizedFix = fix.Trim().ToUpperInvariant();
 
         if (!FixPattern.IsMatch(normalizedFix))

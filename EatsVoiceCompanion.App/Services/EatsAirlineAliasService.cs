@@ -5,14 +5,11 @@ namespace EatsVoiceCompanion.App.Services;
 
 public sealed class EatsAirlineAliasService
 {
-    public EatsAirlineAliasService()
+    public EatsAirlineAliasService(string? airlineFilePath = null)
     {
-        string localAppData =
+        AirlineFilePath = airlineFilePath ?? Path.Combine(
             Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData);
-
-        AirlineFilePath = Path.Combine(
-            localAppData,
+                Environment.SpecialFolder.LocalApplicationData),
             "ATSim2020",
             "eATS",
             "Airlines.txt");

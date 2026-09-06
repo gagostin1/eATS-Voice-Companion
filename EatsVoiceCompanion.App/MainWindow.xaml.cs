@@ -1,19 +1,19 @@
-﻿using System.Windows;
+using System.IO;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using EatsVoiceCompanion.App.Configuration;
+using EatsVoiceCompanion.App.Presentation;
 using EatsVoiceCompanion.App.Services;
 using EatsVoiceCompanion.Core.Commands;
-using System.Windows.Input;
-using EatsVoiceCompanion.Core.Speech;
-using System.Windows.Media;
 using EatsVoiceCompanion.Core.Safety;
+using EatsVoiceCompanion.Core.Speech;
 
 namespace EatsVoiceCompanion.App;
 
 public partial class MainWindow : Window
 {
-    private IReadOnlyDictionary<string, string>
-        _airlineAliases = FallbackAirlineAliases;  
-
     private static readonly IReadOnlyDictionary<string, string>
         FallbackAirlineAliases =
             new Dictionary<string, string>(
@@ -24,42 +24,238 @@ public partial class MainWindow : Window
                 ["American"] = "AAL",
                 ["Air Canada"] = "ACA"
             };
-    private readonly EatsProcessDetector _detector = new();
-    private readonly MicrophoneService _microphoneService = new();
-    private readonly AudioRecorder _audioRecorder = new();
-    private readonly SpeechRecognitionService
-        _speechRecognitionService = new();
-    private readonly VoiceCommandParser _voiceCommandParser;
-    private readonly EatsAirlineAliasService
-        _airlineAliasService = new();  
-    private readonly EatsSnapshotService
-        _snapshotService = new();
 
-    private readonly HashSet<string> _activeCallsigns =
-        new(StringComparer.OrdinalIgnoreCase);
+    private readonly AppLogger _logger;
+    private readonly CompanionSettingsService _settingsService;
+    private readonly EatsProcessDetector _detector;
+    private readonly MicrophoneService _microphoneService;
+    private readonly RecordingStorageService _recordingStorage;
+    private readonly AudioRecorder _audioRecorder;
+    private readonly SpeechRecognitionService _speechRecognitionService;
+    private readonly CancellationTokenSource _lifetimeCancellation = new();
 
-    private bool _hasFreshSnapshot;    
+    private CompanionSettings _settings;
+    private string? _startupSettingsWarning;
+    private IReadOnlyDictionary<string, string> _airlineAliases =
+        FallbackAirlineAliases;
+    private EatsAirlineAliasService _airlineAliasService = null!;
+    private EatsSnapshotService _snapshotService = null!;
+    private RecognitionContextService _recognitionContextService = null!;
+    private SpeechWorkflowService _speechWorkflowService = null!;
+    private VoiceCommandParser _voiceCommandParser = null!;
+    private CancellationTokenSource? _transcriptionCancellation;
+    private IReadOnlySet<string> _activeCallsigns =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private bool _hasFreshSnapshot;
 
     public MainWindow()
     {
-        InitializeComponent();
+        _logger = new AppLogger();
+        _settingsService = new CompanionSettingsService();
+        _settings = LoadSettingsOrDefaults();
+        _detector = new EatsProcessDetector();
+        _microphoneService = new MicrophoneService();
+        _recordingStorage = new RecordingStorageService(
+            _settings.RecordingRetentionDays,
+            _settings.MaximumSavedRecordings);
+        _audioRecorder = new AudioRecorder(_recordingStorage);
+        _speechRecognitionService = new SpeechRecognitionService(
+            logger: _logger);
 
-        _voiceCommandParser =
-            CreateVoiceCommandParser();
+        InitializeComponent();
+        ApplySettingsToUi();
+        ConfigureEatsDataServices();
 
         _audioRecorder.RecordingCompleted +=
             AudioRecorder_RecordingCompleted;
 
+        int deletedRecordings = _recordingStorage.Cleanup();
+
         LoadMicrophones();
         BuildRecognitionContext();
+
+        _logger.Information(
+            "ApplicationStarted",
+            "The application initialized.",
+            new { DeletedRecordings = deletedRecordings });
+    }
+
+    private CompanionSettings LoadSettingsOrDefaults()
+    {
+        try
+        {
+            return _settingsService.Load();
+        }
+        catch (Exception exception)
+        {
+            _startupSettingsWarning =
+                "Saved settings could not be loaded; defaults are in use. " +
+                exception.Message;
+
+            _logger.Error(
+                "SettingsLoadFailed",
+                "Saved settings could not be loaded.",
+                exception);
+
+            return new CompanionSettings();
+        }
+    }
+
+    private void ApplySettingsToUi()
+    {
+        ControllerPositionTextBox.Text = _settings.ControllerPosition;
+        EatsDataDirectoryTextBox.Text = _settings.EatsDataDirectory;
+        SnapshotFreshnessTextBox.Text =
+            _settings.SnapshotFreshnessMinutes.ToString();
+        RecordingRetentionTextBox.Text =
+            _settings.RecordingRetentionDays.ToString();
+        MaximumRecordingsTextBox.Text =
+            _settings.MaximumSavedRecordings.ToString();
+
+        SettingsStatusText.Text = _startupSettingsWarning ??
+            $"Settings file: {_settingsService.SettingsFilePath}";
+
+        SettingsStatusText.Foreground = _startupSettingsWarning is null
+            ? Brushes.DimGray
+            : Brushes.DarkGoldenrod;
+    }
+
+    private void SaveSettings_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_audioRecorder.IsRecording ||
+            _transcriptionCancellation is not null)
+        {
+            SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
+            SettingsStatusText.Text =
+                "Wait for recording or transcription to finish before " +
+                "changing settings.";
+            return;
+        }
+
+        try
+        {
+            CompanionSettings updated = new()
+            {
+                ControllerPosition = ControllerPositionTextBox.Text,
+                EatsDataDirectory = EatsDataDirectoryTextBox.Text,
+                SnapshotFreshnessMinutes = ParseSetting(
+                    SnapshotFreshnessTextBox.Text,
+                    "snapshot freshness"),
+                RecordingRetentionDays = ParseSetting(
+                    RecordingRetentionTextBox.Text,
+                    "recording retention"),
+                MaximumSavedRecordings = ParseSetting(
+                    MaximumRecordingsTextBox.Text,
+                    "maximum recordings"),
+                PreferredMicrophoneName =
+                    (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name
+            };
+
+            _settingsService.Save(updated);
+            _settings = updated;
+            _recordingStorage.UpdatePolicy(
+                updated.RecordingRetentionDays,
+                updated.MaximumSavedRecordings);
+            int deletedRecordings = _recordingStorage.Cleanup();
+
+            ConfigureEatsDataServices();
+            BuildRecognitionContext();
+            RefreshExistingPreviewSafety();
+
+            SettingsStatusText.Foreground = Brushes.ForestGreen;
+            SettingsStatusText.Text =
+                $"Settings saved to {_settingsService.SettingsFilePath}";
+
+            _logger.Information(
+                "SettingsSaved",
+                "Application settings were saved.",
+                new { DeletedRecordings = deletedRecordings });
+        }
+        catch (Exception exception)
+        {
+            SettingsStatusText.Foreground = Brushes.Firebrick;
+            SettingsStatusText.Text =
+                $"Settings were not saved: {exception.Message}";
+
+            _logger.Error(
+                "SettingsSaveFailed",
+                "Application settings could not be saved.",
+                exception);
+        }
+    }
+
+    private static int ParseSetting(
+        string value,
+        string settingName)
+    {
+        if (!int.TryParse(value, out int result))
+        {
+            throw new ArgumentException(
+                $"Enter a valid numeric {settingName}.");
+        }
+
+        return result;
+    }
+
+    private void ConfigureEatsDataServices()
+    {
+        string airlinePath = Path.Combine(
+            _settings.EatsDataDirectory,
+            "Airlines.txt");
+        string snapshotPath = Path.Combine(
+            _settings.EatsDataDirectory,
+            "SnapshotAuto.txt");
+
+        _airlineAliasService = new EatsAirlineAliasService(airlinePath);
+        _snapshotService = new EatsSnapshotService(snapshotPath);
+
+        try
+        {
+            _airlineAliases = _airlineAliasService.Load();
+
+            AirlineDataStatusText.Text =
+                $"Loaded {_airlineAliases.Count} airline callsigns from:\n" +
+                _airlineAliasService.AirlineFilePath;
+
+            _logger.Information(
+                "AirlineAliasesLoaded",
+                "Installed eATS airline aliases were loaded.",
+                new { AliasCount = _airlineAliases.Count });
+        }
+        catch (Exception exception)
+        {
+            _airlineAliases = FallbackAirlineAliases;
+
+            AirlineDataStatusText.Text =
+                "The installed eATS airline data could not be loaded. " +
+                $"Using {_airlineAliases.Count} built-in aliases.\n" +
+                exception.Message;
+
+            _logger.Error(
+                "AirlineAliasesFallback",
+                "Installed airline aliases could not be loaded.",
+                exception);
+        }
+
+        _voiceCommandParser = new VoiceCommandParser(_airlineAliases);
+        _recognitionContextService = new RecognitionContextService(
+            _detector,
+            _snapshotService,
+            _airlineAliases,
+            TimeSpan.FromMinutes(_settings.SnapshotFreshnessMinutes),
+            logger: _logger);
+        _speechWorkflowService = new SpeechWorkflowService(
+            _speechRecognitionService,
+            _recognitionContextService);
     }
 
     private void DetectEats_Click(
         object sender,
         RoutedEventArgs e)
     {
-        EatsProcessInfo? result =
-            _detector.FindRunningInstance();
+        EatsProcessInfo? result = _detector.FindRunningInstance();
 
         if (result is null)
         {
@@ -67,7 +263,12 @@ public partial class MainWindow : Window
                 "eATS was not detected. Start eATS, " +
                 "wait for its main window, and try again.";
 
+            _logger.Warning(
+                "EatsNotDetected",
+                "No running eATS window was detected.");
+
             BuildRecognitionContext();
+            RefreshExistingPreviewSafety();
             return;
         }
 
@@ -79,94 +280,80 @@ public partial class MainWindow : Window
             $"Version: {result.ProductVersion ?? "Unavailable"}\n" +
             $"Location: {result.ExecutablePath ?? "Unavailable"}";
 
+        _logger.Information(
+            "EatsDetected",
+            "A running eATS window was detected.",
+            new
+            {
+                result.ProcessId,
+                result.ProductVersion
+            });
+
         BuildRecognitionContext();
+        RefreshExistingPreviewSafety();
     }
 
-    private void BuildPreview_Click(object sender, RoutedEventArgs e)
+    private void BuildPreview_Click(
+        object sender,
+        RoutedEventArgs e)
     {
         BuildRecognitionContext();
         PreviewErrorText.Text = string.Empty;
 
         try
         {
-            if (CommandTypeBox.SelectedItem is not ComboBoxItem selectedItem ||
-                selectedItem.Tag is not string commandType)
-            {
-                throw new InvalidOperationException(
-                    "Select an instruction type.");
-            }
+            VoiceInstructionType instructionType =
+                GetSelectedInstructionType();
 
-            string instruction = commandType switch
-            {
-                "FlyHeading" =>
-                    EatsCommandFormatter.FlyHeading(
-                        ParseNumber("heading")),
-
-                "TurnLeft" =>
-                    EatsCommandFormatter.TurnLeftHeading(
-                        ParseNumber("heading")),
-
-                "TurnRight" =>
-                    EatsCommandFormatter.TurnRightHeading(
-                        ParseNumber("heading")),
-
-                "Climb" =>
-                    EatsCommandFormatter.ClimbAndMaintain(
-                        ParseNumber("altitude")),
-
-                "Descend" =>
-                    EatsCommandFormatter.DescendAndMaintain(
-                        ParseNumber("altitude")),
-
-                "Speed" =>
-                    EatsCommandFormatter.MaintainSpeed(
-                        ParseNumber("speed")),
-
-                "Direct" =>
-                    EatsCommandFormatter.ProceedDirect(
-                        CommandValueTextBox.Text),
-                
-                "Roger" =>
-                    EatsCommandFormatter.Roger(),    
-
-                _ => throw new InvalidOperationException(
-                    "The selected instruction is not supported.")
-            };
-            string transmission =
-                EatsCommandFormatter.BuildTransmission(
-                    CallsignTextBox.Text,
-                    instruction);
+            string transmission = CommandPreviewBuilder.Build(
+                CallsignTextBox.Text,
+                instructionType,
+                CommandValueTextBox.Text);
 
             PreviewText.Text = transmission;
+            string callsign = transmission.Split(' ')[0];
+            UpdateCommandSafetyStatus(callsign);
 
-            string normalizedCallsign =
-                transmission.Split(
-                    ' ',
-                    StringSplitOptions.RemoveEmptyEntries)[0];
-
-            UpdateCommandSafetyStatus(
-                normalizedCallsign);
+            _logger.Information(
+                "ManualPreviewBuilt",
+                "A manual command preview was built.",
+                new { InstructionType = instructionType.ToString() });
         }
         catch (Exception exception)
         {
-            PreviewText.Text = "Command not generated.";
-            PreviewErrorText.Text = exception.Message;
-            MarkCommandNotReady(
+            ShowCommandError(
+                exception.Message,
                 "the manual command is invalid.");
-            MarkCommandNotReady(
-                "speech recognition did not complete.");
+
+            _logger.Error(
+                "ManualPreviewRejected",
+                "A manual command preview was rejected.",
+                exception);
         }
     }
 
-    private int ParseNumber(string valueName)
+    private VoiceInstructionType GetSelectedInstructionType()
     {
-        if (!int.TryParse(CommandValueTextBox.Text, out int value))
+        if (CommandTypeBox.SelectedItem is not ComboBoxItem selectedItem ||
+            selectedItem.Tag is not string commandType)
         {
-            throw new ArgumentException(
-                $"Enter a valid numeric {valueName}.");
+            throw new InvalidOperationException(
+                "Select an instruction type.");
         }
 
-        return value;
+        return commandType switch
+        {
+            "FlyHeading" => VoiceInstructionType.FlyHeading,
+            "TurnLeft" => VoiceInstructionType.TurnLeftHeading,
+            "TurnRight" => VoiceInstructionType.TurnRightHeading,
+            "Climb" => VoiceInstructionType.ClimbAndMaintain,
+            "Descend" => VoiceInstructionType.DescendAndMaintain,
+            "Speed" => VoiceInstructionType.MaintainSpeed,
+            "Direct" => VoiceInstructionType.ProceedDirect,
+            "Roger" => VoiceInstructionType.Roger,
+            _ => throw new InvalidOperationException(
+                "The selected instruction is not supported.")
+        };
     }
 
     private void RefreshMicrophones_Click(
@@ -189,12 +376,16 @@ public partial class MainWindow : Window
             {
                 MicrophoneStatusText.Text =
                     "No recording devices were detected.";
-
                 return;
             }
 
-            MicrophoneComboBox.SelectedIndex = 0;
+            AudioInputDevice? preferred = devices.FirstOrDefault(
+                device => string.Equals(
+                    device.Name,
+                    _settings.PreferredMicrophoneName,
+                    StringComparison.OrdinalIgnoreCase));
 
+            MicrophoneComboBox.SelectedItem = preferred ?? devices[0];
             MicrophoneStatusText.Text =
                 $"{devices.Count} recording device(s) detected.";
         }
@@ -202,51 +393,80 @@ public partial class MainWindow : Window
         {
             MicrophoneStatusText.Text =
                 $"Unable to enumerate microphones: {exception.Message}";
+
+            _logger.Error(
+                "MicrophoneEnumerationFailed",
+                "Recording devices could not be enumerated.",
+                exception);
         }
     }
 
     private void RecordButton_MouseDown(
-    object sender,
-    MouseButtonEventArgs e)
-{
-    e.Handled = true;
-
-    if (MicrophoneComboBox.SelectedItem
-        is not AudioInputDevice microphone)
+        object sender,
+        MouseButtonEventArgs e)
     {
-        RecordingStatusText.Text =
-            "Select a microphone first.";
+        e.Handled = true;
 
-        return;
+        if (MicrophoneComboBox.SelectedItem
+            is not AudioInputDevice microphone)
+        {
+            RecordingStatusText.Text = "Select a microphone first.";
+            return;
+        }
+
+        try
+        {
+            RecordButton.CaptureMouse();
+
+            string filePath = _audioRecorder.Start(
+                microphone.DeviceNumber);
+
+            SaveSettingsButton.IsEnabled = false;
+            RecordButton.Content = "Recording — release to stop";
+            RecordingStatusText.Text =
+                $"Recording from {microphone.Name}\n{filePath}";
+
+            _logger.Information(
+                "RecordingStarted",
+                "Audio recording started.",
+                new { microphone.DeviceNumber });
+        }
+        catch (Exception exception)
+        {
+            RecordButton.ReleaseMouseCapture();
+            RecordButton.Content = "Hold to record";
+            SaveSettingsButton.IsEnabled = true;
+            RecordingStatusText.Text =
+                $"Recording could not start: {exception.Message}";
+
+            _logger.Error(
+                "RecordingStartFailed",
+                "Audio recording could not start.",
+                exception);
+        }
     }
-
-    try
-    {
-        RecordButton.CaptureMouse();
-
-        string filePath = _audioRecorder.Start(
-            microphone.DeviceNumber);
-
-        RecordButton.Content = "Recording — release to stop";
-        RecordingStatusText.Text =
-            $"Recording from {microphone.Name}\n{filePath}";
-    }
-    catch (Exception exception)
-    {
-        RecordButton.ReleaseMouseCapture();
-        RecordButton.Content = "Hold to record";
-        RecordingStatusText.Text =
-            $"Recording could not start: {exception.Message}";
-    }
-}
 
     private void RecordButton_MouseUp(
         object sender,
         MouseButtonEventArgs e)
     {
         e.Handled = true;
+        StopActiveRecording();
+    }
 
-        RecordButton.ReleaseMouseCapture();
+    private void MainWindow_Deactivated(
+        object? sender,
+        EventArgs e)
+    {
+        StopActiveRecording();
+    }
+
+    private void StopActiveRecording()
+    {
+        if (RecordButton.IsMouseCaptured)
+        {
+            RecordButton.ReleaseMouseCapture();
+        }
 
         if (!_audioRecorder.IsRecording)
         {
@@ -260,159 +480,251 @@ public partial class MainWindow : Window
         _audioRecorder.Stop();
     }
 
+    private void CancelTranscription_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_transcriptionCancellation is null)
+        {
+            return;
+        }
+
+        CancelTranscriptionButton.IsEnabled = false;
+        CancelTranscriptionButton.Content = "Canceling...";
+        _transcriptionCancellation.Cancel();
+
+        _logger.Information(
+            "TranscriptionCancellationRequested",
+            "The user requested transcription cancellation.");
+    }
+
     private async void AudioRecorder_RecordingCompleted(
         object? sender,
         AudioRecordingCompletedEventArgs e)
     {
-        await Dispatcher.InvokeAsync(() =>
+        if (_lifetimeCancellation.IsCancellationRequested)
         {
-            if (e.Error is not null)
-            {
-                RecordButton.Content = "Hold to record";
-                RecordButton.IsEnabled = true;
-
-                RecordingStatusText.Text =
-                    $"Recording failed: {e.Error.Message}";
-
-                SpeechStatusText.Text =
-                    "Speech recognition was not started.";
-
-                return;
-            }
-
-            RecordingStatusText.Text =
-                $"Recording saved successfully:\n{e.FilePath}";
-
-            RecordButton.Content = "Transcribing...";
-            TranscriptText.Text = "Working...";
-            SpeechStatusText.Text =
-                "Preparing speech recognition...";
-        });
+            return;
+        }
 
         if (e.Error is not null)
         {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                SetTranscriptionControls(isBusy: false);
+                RecordingStatusText.Text =
+                    $"Recording failed: {e.Error.Message}";
+                SpeechStatusText.Text =
+                    "Speech recognition was not started.";
+                ShowCommandError(
+                    "The recording did not complete.",
+                    "the recording failed.");
+            });
+
+            _logger.Error(
+                "RecordingFailed",
+                "Audio recording failed.",
+                e.Error);
             return;
         }
 
-        IProgress<string> progress =
-            new Progress<string>(message =>
-            {
-                Dispatcher.BeginInvoke(
-                    new Action(() =>
-                    {
-                        SpeechStatusText.Text = message;
-                    }));
-            });
+        using CancellationTokenSource cancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
 
-        string transcript;
+        _transcriptionCancellation = cancellation;
 
-        string recognitionContext = string.Empty;
+        string controllerPosition = string.Empty;
 
         await Dispatcher.InvokeAsync(() =>
         {
-            recognitionContext =
-                BuildRecognitionContext();
+            SetTranscriptionControls(isBusy: true);
+            RecordingStatusText.Text =
+                $"Recording saved successfully:\n{e.FilePath}";
+            TranscriptText.Text = "Working...";
+            SpeechStatusText.Text =
+                "Preparing speech recognition...";
+            controllerPosition = ControllerPositionTextBox.Text;
         });
+
+        IProgress<string> progress = new Progress<string>(message =>
+        {
+            if (!cancellation.IsCancellationRequested &&
+                !Dispatcher.HasShutdownStarted)
+            {
+                Dispatcher.BeginInvoke(
+                    new Action(() => SpeechStatusText.Text = message));
+            }
+        });
+
+        IProgress<RecognitionContextResult> contextProgress =
+            new Progress<RecognitionContextResult>(context =>
+            {
+                if (!cancellation.IsCancellationRequested &&
+                    !Dispatcher.HasShutdownStarted)
+                {
+                    Dispatcher.BeginInvoke(
+                        new Action(() =>
+                            ApplyRecognitionContext(context)));
+                }
+            });
+
+        _logger.Information(
+            "TranscriptionStarted",
+            "Local speech transcription started.");
 
         try
         {
-            transcript =
-                await _speechRecognitionService.TranscribeAsync(
+            SpeechWorkflowResult workflow =
+                await _speechWorkflowService.RunAsync(
                     e.FilePath,
+                    controllerPosition,
                     progress,
-                    recognitionContext);
+                    contextProgress,
+                    cancellation.Token);
+
+            string transcript = workflow.Transcript;
+
+            if (_lifetimeCancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ApplyRecognitionContext(
+                    workflow.ContextAfterTranscription);
+
+                TranscriptText.Text =
+                    string.IsNullOrWhiteSpace(transcript)
+                        ? "No speech was recognized."
+                        : transcript;
+
+                BuildVoicePreview(
+                    transcript,
+                    refreshRecognitionContext: false);
+            });
+
+            _logger.Information(
+                "TranscriptionCompleted",
+                "Local speech transcription completed.",
+                new { HasTranscript = !string.IsNullOrWhiteSpace(transcript) });
+        }
+        catch (OperationCanceledException)
+            when (cancellation.IsCancellationRequested)
+        {
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    TranscriptText.Text = "Transcription canceled.";
+                    SpeechStatusText.Text =
+                        "Transcription was canceled by the user.";
+                    ShowCommandError(
+                        "Speech recognition was canceled.",
+                        "transcription was canceled.");
+                });
+
+                _logger.Information(
+                    "TranscriptionCanceled",
+                    "Local speech transcription was canceled.");
+            }
         }
         catch (Exception exception)
         {
-            await Dispatcher.InvokeAsync(() =>
+            if (!_lifetimeCancellation.IsCancellationRequested)
             {
-                TranscriptText.Text =
-                    "Transcription failed.";
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    TranscriptText.Text = "Transcription failed.";
+                    SpeechStatusText.Text = exception.Message;
+                    ShowCommandError(
+                        "Speech recognition did not complete.",
+                        "speech recognition did not complete.");
+                });
+            }
 
-                SpeechStatusText.Text =
-                    exception.Message;
-
-                PreviewText.Text =
-                    "Command not generated.";
-
-                PreviewErrorText.Text =
-                    "Speech recognition did not complete.";
-
-                RecordButton.Content = "Hold to record";
-                RecordButton.IsEnabled = true;
-            });
-
-            return;
+            _logger.Error(
+                "TranscriptionFailed",
+                "Local speech transcription failed.",
+                exception);
         }
-
-        await Dispatcher.InvokeAsync(() =>
+        finally
         {
-            TranscriptText.Text =
-                string.IsNullOrWhiteSpace(transcript)
-                    ? "No speech was recognized."
-                    : transcript;
+            if (ReferenceEquals(_transcriptionCancellation, cancellation))
+            {
+                _transcriptionCancellation = null;
+            }
 
-            BuildVoicePreview(transcript);
-
-            RecordButton.Content = "Hold to record";
-            RecordButton.IsEnabled = true;
-        });
+            if (!_lifetimeCancellation.IsCancellationRequested &&
+                !Dispatcher.HasShutdownStarted)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                    SetTranscriptionControls(isBusy: false));
+            }
+        }
     }
 
-    private void BuildVoicePreview(string transcript)
+    private void SetTranscriptionControls(bool isBusy)
+    {
+        RecordButton.Content = isBusy
+            ? "Transcribing..."
+            : "Hold to record";
+        RecordButton.IsEnabled = !isBusy;
+        SaveSettingsButton.IsEnabled = !isBusy;
+        CancelTranscriptionButton.IsEnabled = isBusy;
+        CancelTranscriptionButton.Content = "Cancel transcription";
+    }
+
+    private void BuildVoicePreview(
+        string transcript,
+        bool refreshRecognitionContext = true)
     {
         PreviewErrorText.Text = string.Empty;
 
-        // This is the blank-transcript branch.
         if (string.IsNullOrWhiteSpace(transcript))
         {
-            PreviewText.Text =
-                "Command not generated.";
-
-            PreviewErrorText.Text =
-                "No speech was recognized.";
-
             SpeechStatusText.Text =
                 "Transcription completed without recognizable speech.";
-
-            MarkCommandNotReady(
+            ShowCommandError(
+                "No speech was recognized.",
                 "no speech was recognized.");
-
             return;
+        }
+
+        if (refreshRecognitionContext)
+        {
+            BuildRecognitionContext();
         }
 
         try
         {
-            ParsedVoiceCommand parsed =
-                _voiceCommandParser.Parse(
-                    transcript,
-                    ControllerPositionTextBox.Text);
+            ParsedVoiceCommand parsed = _voiceCommandParser.Parse(
+                transcript,
+                ControllerPositionTextBox.Text);
+
+            string transmission = EatsTransmissionValidator.Validate(
+                parsed.ToEatsCommand());
 
             ApplyParsedCommandToEditor(parsed);
-
-            PreviewText.Text =
-                parsed.ToEatsCommand();
-
-            UpdateCommandSafetyStatus(
-                parsed.Callsign);
-
+            PreviewText.Text = transmission;
+            UpdateCommandSafetyStatus(parsed.Callsign);
             SpeechStatusText.Text =
                 "Transcription completed and command preview generated.";
         }
         catch (Exception exception)
         {
-            PreviewText.Text =
-                "Command not generated.";
-
-            PreviewErrorText.Text =
-                exception.Message;
-
             SpeechStatusText.Text =
                 "Transcription completed, but the command " +
                 "could not be interpreted.";
-
-            MarkCommandNotReady(
+            ShowCommandError(
+                exception.Message,
                 "the transcript did not produce a valid command.");
+
+            _logger.Error(
+                "VoicePreviewRejected",
+                "The transcript did not produce a valid command preview.",
+                exception);
         }
     }
 
@@ -423,30 +735,14 @@ public partial class MainWindow : Window
 
         string commandTag = parsed.InstructionType switch
         {
-            VoiceInstructionType.FlyHeading =>
-                "FlyHeading",
-
-            VoiceInstructionType.TurnLeftHeading =>
-                "TurnLeft",
-
-            VoiceInstructionType.TurnRightHeading =>
-                "TurnRight",
-
-            VoiceInstructionType.ClimbAndMaintain =>
-                "Climb",
-
-            VoiceInstructionType.DescendAndMaintain =>
-                "Descend",
-
-            VoiceInstructionType.MaintainSpeed =>
-                "Speed",
-
-            VoiceInstructionType.ProceedDirect =>
-                "Direct",
-
-            VoiceInstructionType.Roger =>
-                "Roger",    
-
+            VoiceInstructionType.FlyHeading => "FlyHeading",
+            VoiceInstructionType.TurnLeftHeading => "TurnLeft",
+            VoiceInstructionType.TurnRightHeading => "TurnRight",
+            VoiceInstructionType.ClimbAndMaintain => "Climb",
+            VoiceInstructionType.DescendAndMaintain => "Descend",
+            VoiceInstructionType.MaintainSpeed => "Speed",
+            VoiceInstructionType.ProceedDirect => "Direct",
+            VoiceInstructionType.Roger => "Roger",
             _ => throw new InvalidOperationException(
                 "The instruction type is not supported.")
         };
@@ -459,187 +755,95 @@ public partial class MainWindow : Window
                     commandTag,
                     StringComparison.Ordinal))
             {
-                CommandTypeBox.SelectedItem =
-                    comboBoxItem;
-
+                CommandTypeBox.SelectedItem = comboBoxItem;
                 break;
             }
         }
 
         CommandValueTextBox.Text =
-            parsed.InstructionType ==
-            VoiceInstructionType.ProceedDirect
+            parsed.InstructionType == VoiceInstructionType.ProceedDirect
                 ? parsed.TextValue ?? string.Empty
-                : parsed.NumericValue?.ToString() ??
-                string.Empty;
-    }
-
-    private VoiceCommandParser CreateVoiceCommandParser()
-    {
-        try
-        {
-            _airlineAliases =
-                _airlineAliasService.Load();
-
-            AirlineDataStatusText.Text =
-                $"Loaded {_airlineAliases.Count} airline callsigns from:\n" +
-                _airlineAliasService.AirlineFilePath;
-        }
-        catch (Exception exception)
-        {
-            _airlineAliases =
-                FallbackAirlineAliases;
-
-            AirlineDataStatusText.Text =
-                "The installed eATS airline data could not be loaded. " +
-                $"Using {_airlineAliases.Count} built-in aliases.\n" +
-                exception.Message;
-        }
-
-        return new VoiceCommandParser(
-            _airlineAliases);
+                : parsed.NumericValue?.ToString() ?? string.Empty;
     }
 
     private string BuildRecognitionContext()
     {
-        string controllerPosition =
-            ControllerPositionTextBox.Text.Trim();
+        RecognitionContextResult context =
+            _recognitionContextService.Build(
+                ControllerPositionTextBox.Text);
 
-        string positionContext =
-            string.IsNullOrWhiteSpace(controllerPosition)
-                ? string.Empty
-                : $"Controller position: {controllerPosition}.";
-        
-        _activeCallsigns.Clear();
-        _hasFreshSnapshot = false;
+        ApplyRecognitionContext(context);
+        return context.Prompt;
+    }
 
+    private void ApplyRecognitionContext(
+        RecognitionContextResult context)
+    {
+        _activeCallsigns = context.ActiveCallsigns;
+        _hasFreshSnapshot = context.HasFreshSnapshot;
+        SnapshotStatusText.Text = context.StatusMessage;
+    }
+
+    private void ShowCommandError(
+        string error,
+        string notReadyReason)
+    {
+        PreviewText.Text = "Command not generated.";
+        PreviewErrorText.Text = error;
+        ApplySafetyStatus(
+            CommandSafetyEvaluator.NotReady(notReadyReason));
+    }
+
+    private void UpdateCommandSafetyStatus(string callsign)
+    {
+        CommandSafetyResult result = CommandSafetyEvaluator.Evaluate(
+            callsign,
+            _hasFreshSnapshot,
+            _activeCallsigns);
+
+        ApplySafetyStatus(result);
+    }
+
+    private void RefreshExistingPreviewSafety()
+    {
         try
         {
-            if (_detector.FindRunningInstance() is null)
-            {
-                SnapshotStatusText.Text =
-                    "eATS is not running. " +
-                    "Active-aircraft context was not used.";
+            string transmission = EatsTransmissionValidator.Validate(
+                PreviewText.Text);
+            string callsign = transmission.Split(' ')[0];
 
-                return positionContext;
-            }
-
-            EatsSnapshotData snapshot =
-                _snapshotService.Load();
-
-            TimeSpan snapshotAge =
-                DateTime.UtcNow -
-                snapshot.LastWriteTimeUtc;
-
-            if (snapshotAge < TimeSpan.Zero)
-            {
-                snapshotAge = TimeSpan.Zero;
-            }
-
-            if (snapshotAge > TimeSpan.FromMinutes(3))
-            {
-                SnapshotStatusText.Text =
-                    $"The eATS snapshot is stale " +
-                    $"({snapshotAge.TotalMinutes:F1} minutes old). " +
-                    "Active-aircraft context was not used.";
-
-                return positionContext;
-            }
-
-            IReadOnlyList<string> activeCallsigns =
-                snapshot.Callsigns;
-
-            foreach (string activeCallsign in activeCallsigns)
-            {
-                _activeCallsigns.Add(activeCallsign);
-            }
-
-            _hasFreshSnapshot = true;    
-
-            string airlineContext =
-                ActiveCallsignPromptBuilder.Build(
-                    activeCallsigns,
-                    _airlineAliases);
-
-            if (activeCallsigns.Count == 0)
-            {
-                SnapshotStatusText.Text =
-                    "The snapshot contained no active aircraft.";
-
-                return positionContext;
-            }
-
-            if (string.IsNullOrWhiteSpace(airlineContext))
-            {
-                SnapshotStatusText.Text =
-                    $"Found {activeCallsigns.Count} active aircraft, " +
-                    "but none had supported airline callsigns.";
-
-                return positionContext;
-            }
-
-            SnapshotStatusText.Text =
-                $"Loaded {activeCallsigns.Count} active aircraft " +
-                $"from a {snapshotAge.TotalSeconds:F0}-second-old snapshot. " +
-                "Dynamic airline speech context is ready.";
-
-            return $"{positionContext} {airlineContext}".Trim();
+            UpdateCommandSafetyStatus(callsign);
         }
-        catch (Exception exception)
+        catch (ArgumentException)
         {
-            SnapshotStatusText.Text =
-                "Active-aircraft speech context is unavailable.\n" +
-                exception.Message;
-
-            return positionContext;
+            ApplySafetyStatus(
+                CommandSafetyEvaluator.NotReady(
+                    "build a command preview."));
         }
     }
-    private void UpdateCommandSafetyStatus(
-        string callsign)
+
+    private void ApplySafetyStatus(CommandSafetyResult result)
     {
-        if (!_hasFreshSnapshot)
-        {
-            CommandSafetyStatusText.Foreground =
-                Brushes.DarkGoldenrod;
+        CommandSafetyPresentation presentation =
+            CommandSafetyPresenter.Create(result);
 
-            CommandSafetyStatusText.Text =
-                "Preview only: the callsign could not be " +
-                "verified against a fresh eATS snapshot.";
-
-            return;
-        }
-
-        bool isActive =
-            ActiveCallsignValidator.IsActive(
-                callsign,
-                _activeCallsigns);
-
-        if (isActive)
-        {
-            CommandSafetyStatusText.Foreground =
-                Brushes.ForestGreen;
-
-            CommandSafetyStatusText.Text =
-                $"Verified: {callsign} is active in the " +
-                "current eATS snapshot.";
-
-            return;
-        }
-
-        CommandSafetyStatusText.Foreground =
-            Brushes.Firebrick;
-
-        CommandSafetyStatusText.Text =
-            $"Blocked: {callsign} was not found in the " +
-            "current eATS snapshot.";
+        CommandSafetyStatusText.Foreground = presentation.Foreground;
+        CommandSafetyStatusText.Text = presentation.Message;
     }
 
-    private void MarkCommandNotReady(string reason)
+    protected override void OnClosed(EventArgs e)
     {
-        CommandSafetyStatusText.Foreground =
-            Brushes.Firebrick;
+        _lifetimeCancellation.Cancel();
+        _transcriptionCancellation?.Cancel();
 
-        CommandSafetyStatusText.Text =
-            $"Not ready: {reason}";
+        _audioRecorder.RecordingCompleted -=
+            AudioRecorder_RecordingCompleted;
+        _audioRecorder.Dispose();
+
+        _logger.Information(
+            "ApplicationClosed",
+            "The application closed.");
+
+        base.OnClosed(e);
     }
 }

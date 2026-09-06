@@ -20,8 +20,16 @@ public sealed class AudioRecordingCompletedEventArgs : EventArgs
 
 public sealed class AudioRecorder : IDisposable
 {
+    private readonly RecordingStorageService _storage;
     private WaveInEvent? _waveIn;
     private WaveFileWriter? _writer;
+
+    public AudioRecorder(RecordingStorageService? storage = null)
+    {
+        _storage = storage ?? new RecordingStorageService(
+            retentionDays: 7,
+            maximumRecordings: 100);
+    }
 
     public event EventHandler<AudioRecordingCompletedEventArgs>?
         RecordingCompleted;
@@ -38,15 +46,8 @@ public sealed class AudioRecorder : IDisposable
                 "A recording is already in progress.");
         }
 
-        string directory = Path.Combine(
-            Path.GetTempPath(),
-            "EatsVoiceCompanion");
-
-        Directory.CreateDirectory(directory);
-
-        CurrentFilePath = Path.Combine(
-            directory,
-            $"recording-{DateTime.Now:yyyyMMdd-HHmmss}.wav");
+        _storage.Cleanup();
+        CurrentFilePath = _storage.CreateFilePath();
 
         _waveIn = new WaveInEvent
         {

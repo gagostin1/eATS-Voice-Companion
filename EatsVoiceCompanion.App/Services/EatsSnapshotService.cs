@@ -7,16 +7,18 @@ public sealed record EatsSnapshotData(
     IReadOnlyList<string> Callsigns,
     DateTime LastWriteTimeUtc);
 
-public sealed class EatsSnapshotService
+public interface IEatsSnapshotService
 {
-    public EatsSnapshotService()
-    {
-        string localAppData =
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData);
+    EatsSnapshotData Load();
+}
 
-        SnapshotFilePath = Path.Combine(
-            localAppData,
+public sealed class EatsSnapshotService : IEatsSnapshotService
+{
+    public EatsSnapshotService(string? snapshotFilePath = null)
+    {
+        SnapshotFilePath = snapshotFilePath ?? Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
             "ATSim2020",
             "eATS",
             "SnapshotAuto.txt");
