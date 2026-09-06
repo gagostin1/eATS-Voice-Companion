@@ -4,6 +4,8 @@ using EatsVoiceCompanion.App.Services;
 using EatsVoiceCompanion.Core.Commands;
 using System.Windows.Input;
 using EatsVoiceCompanion.Core.Speech;
+using System.Windows.Media;
+using EatsVoiceCompanion.Core.Safety;
 
 namespace EatsVoiceCompanion.App;
 
@@ -33,6 +35,11 @@ public partial class MainWindow : Window
     private readonly EatsSnapshotService
         _snapshotService = new();
 
+    private readonly HashSet<string> _activeCallsigns =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private bool _hasFreshSnapshot;    
+
     public MainWindow()
     {
         InitializeComponent();
@@ -47,14 +54,20 @@ public partial class MainWindow : Window
         BuildRecognitionContext();
     }
 
-    private void DetectEats_Click(object sender, RoutedEventArgs e)
+    private void DetectEats_Click(
+        object sender,
+        RoutedEventArgs e)
     {
-        EatsProcessInfo? result = _detector.FindRunningInstance();
+        EatsProcessInfo? result =
+            _detector.FindRunningInstance();
 
         if (result is null)
         {
             StatusText.Text =
-                "eATS was not detected. Start eATS, wait for its main window, and try again.";
+                "eATS was not detected. Start eATS, " +
+                "wait for its main window, and try again.";
+
+            BuildRecognitionContext();
             return;
         }
 
@@ -65,10 +78,13 @@ public partial class MainWindow : Window
             $"Window handle: 0x{result.MainWindowHandle:X}\n" +
             $"Version: {result.ProductVersion ?? "Unavailable"}\n" +
             $"Location: {result.ExecutablePath ?? "Unavailable"}";
+
+        BuildRecognitionContext();
     }
 
     private void BuildPreview_Click(object sender, RoutedEventArgs e)
     {
+        BuildRecognitionContext();
         PreviewErrorText.Text = string.Empty;
 
         try
@@ -116,16 +132,29 @@ public partial class MainWindow : Window
                 _ => throw new InvalidOperationException(
                     "The selected instruction is not supported.")
             };
-
-            PreviewText.Text =
+            string transmission =
                 EatsCommandFormatter.BuildTransmission(
                     CallsignTextBox.Text,
                     instruction);
+
+            PreviewText.Text = transmission;
+
+            string normalizedCallsign =
+                transmission.Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries)[0];
+
+            UpdateCommandSafetyStatus(
+                normalizedCallsign);
         }
         catch (Exception exception)
         {
             PreviewText.Text = "Command not generated.";
             PreviewErrorText.Text = exception.Message;
+            MarkCommandNotReady(
+                "the manual command is invalid.");
+            MarkCommandNotReady(
+                "speech recognition did not complete.");
         }
     }
 
@@ -334,6 +363,7 @@ public partial class MainWindow : Window
     {
         PreviewErrorText.Text = string.Empty;
 
+        // This is the blank-transcript branch.
         if (string.IsNullOrWhiteSpace(transcript))
         {
             PreviewText.Text =
@@ -344,6 +374,9 @@ public partial class MainWindow : Window
 
             SpeechStatusText.Text =
                 "Transcription completed without recognizable speech.";
+
+            MarkCommandNotReady(
+                "no speech was recognized.");
 
             return;
         }
@@ -360,6 +393,9 @@ public partial class MainWindow : Window
             PreviewText.Text =
                 parsed.ToEatsCommand();
 
+            UpdateCommandSafetyStatus(
+                parsed.Callsign);
+
             SpeechStatusText.Text =
                 "Transcription completed and command preview generated.";
         }
@@ -374,6 +410,9 @@ public partial class MainWindow : Window
             SpeechStatusText.Text =
                 "Transcription completed, but the command " +
                 "could not be interpreted.";
+
+            MarkCommandNotReady(
+                "the transcript did not produce a valid command.");
         }
     }
 
@@ -470,6 +509,9 @@ public partial class MainWindow : Window
             string.IsNullOrWhiteSpace(controllerPosition)
                 ? string.Empty
                 : $"Controller position: {controllerPosition}.";
+        
+        _activeCallsigns.Clear();
+        _hasFreshSnapshot = false;
 
         try
         {
@@ -506,6 +548,13 @@ public partial class MainWindow : Window
 
             IReadOnlyList<string> activeCallsigns =
                 snapshot.Callsigns;
+
+            foreach (string activeCallsign in activeCallsigns)
+            {
+                _activeCallsigns.Add(activeCallsign);
+            }
+
+            _hasFreshSnapshot = true;    
 
             string airlineContext =
                 ActiveCallsignPromptBuilder.Build(
@@ -544,5 +593,53 @@ public partial class MainWindow : Window
 
             return positionContext;
         }
+    }
+    private void UpdateCommandSafetyStatus(
+        string callsign)
+    {
+        if (!_hasFreshSnapshot)
+        {
+            CommandSafetyStatusText.Foreground =
+                Brushes.DarkGoldenrod;
+
+            CommandSafetyStatusText.Text =
+                "Preview only: the callsign could not be " +
+                "verified against a fresh eATS snapshot.";
+
+            return;
+        }
+
+        bool isActive =
+            ActiveCallsignValidator.IsActive(
+                callsign,
+                _activeCallsigns);
+
+        if (isActive)
+        {
+            CommandSafetyStatusText.Foreground =
+                Brushes.ForestGreen;
+
+            CommandSafetyStatusText.Text =
+                $"Verified: {callsign} is active in the " +
+                "current eATS snapshot.";
+
+            return;
+        }
+
+        CommandSafetyStatusText.Foreground =
+            Brushes.Firebrick;
+
+        CommandSafetyStatusText.Text =
+            $"Blocked: {callsign} was not found in the " +
+            "current eATS snapshot.";
+    }
+
+    private void MarkCommandNotReady(string reason)
+    {
+        CommandSafetyStatusText.Foreground =
+            Brushes.Firebrick;
+
+        CommandSafetyStatusText.Text =
+            $"Not ready: {reason}";
     }
 }
