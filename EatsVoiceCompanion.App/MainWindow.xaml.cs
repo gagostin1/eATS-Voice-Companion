@@ -331,6 +331,8 @@ public partial class MainWindow : Window
             ParsedVoiceCommand parsed =
                 _voiceCommandParser.Parse(transcript);
 
+            ApplyParsedCommandToEditor(parsed);
+
             PreviewText.Text =
                 parsed.ToEatsCommand();
 
@@ -349,6 +351,61 @@ public partial class MainWindow : Window
                 "Transcription completed, but the command " +
                 "could not be interpreted.";
         }
+    }
+
+    private void ApplyParsedCommandToEditor(
+        ParsedVoiceCommand parsed)
+    {
+        CallsignTextBox.Text = parsed.Callsign;
+
+        string commandTag = parsed.InstructionType switch
+        {
+            VoiceInstructionType.FlyHeading =>
+                "FlyHeading",
+
+            VoiceInstructionType.TurnLeftHeading =>
+                "TurnLeft",
+
+            VoiceInstructionType.TurnRightHeading =>
+                "TurnRight",
+
+            VoiceInstructionType.ClimbAndMaintain =>
+                "Climb",
+
+            VoiceInstructionType.DescendAndMaintain =>
+                "Descend",
+
+            VoiceInstructionType.MaintainSpeed =>
+                "Speed",
+
+            VoiceInstructionType.ProceedDirect =>
+                "Direct",
+
+            _ => throw new InvalidOperationException(
+                "The instruction type is not supported.")
+        };
+
+        foreach (object item in CommandTypeBox.Items)
+        {
+            if (item is ComboBoxItem comboBoxItem &&
+                string.Equals(
+                    comboBoxItem.Tag?.ToString(),
+                    commandTag,
+                    StringComparison.Ordinal))
+            {
+                CommandTypeBox.SelectedItem =
+                    comboBoxItem;
+
+                break;
+            }
+        }
+
+        CommandValueTextBox.Text =
+            parsed.InstructionType ==
+            VoiceInstructionType.ProceedDirect
+                ? parsed.TextValue ?? string.Empty
+                : parsed.NumericValue?.ToString() ??
+                string.Empty;
     }
 
 }
