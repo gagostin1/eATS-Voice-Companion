@@ -47,7 +47,7 @@ The project currently uses [NAudio 2.3.0](https://www.nuget.org/packages/NAudio/
 Clone the repository and enter its directory:
 
 ```powershell
-git clone [<repository-url>](https://github.com/gagostin1/eATS-Voice-Companion.git)
+git clone https://github.com/gagostin1/eATS-Voice-Companion.git
 cd eATS-Voice-Companion
 ```
 
