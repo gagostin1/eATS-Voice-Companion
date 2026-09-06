@@ -116,6 +116,11 @@
                                    Text="Detection has not been run."
                                    TextWrapping="Wrap"/>
                     </Border>
+                    <TextBlock x:Name="AirlineDataStatusText"
+                            Margin="0,10,0,0"
+                            Foreground="#FF555555"
+                            Text="Airline data has not been loaded."
+                            TextWrapping="Wrap"/>
                 </StackPanel>
             </GroupBox>
 

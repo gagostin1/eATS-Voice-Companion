@@ -16,6 +16,7 @@ public sealed class SpeechRecognitionService
     "American four five, descend and maintain one zero thousand. " +
     "United seven fourteen. " +
     "American five twenty-one. " +
+    "Asiana twenty-five. " +
     "Descend and maintain. Maintain speed. Proceed direct.";
 
     public SpeechRecognitionService()

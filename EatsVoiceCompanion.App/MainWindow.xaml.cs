@@ -10,7 +10,7 @@ namespace EatsVoiceCompanion.App;
 public partial class MainWindow : Window
 {
     private static readonly IReadOnlyDictionary<string, string>
-        AirlineAliases =
+        FallbackAirlineAliases =
             new Dictionary<string, string>(
                 StringComparer.OrdinalIgnoreCase)
             {
@@ -23,13 +23,17 @@ public partial class MainWindow : Window
     private readonly MicrophoneService _microphoneService = new();
     private readonly AudioRecorder _audioRecorder = new();
     private readonly SpeechRecognitionService
-    _speechRecognitionService = new();
-    private readonly VoiceCommandParser _voiceCommandParser =
-        new(AirlineAliases);
+        _speechRecognitionService = new();
+    private readonly VoiceCommandParser _voiceCommandParser;
+    private readonly EatsAirlineAliasService
+        _airlineAliasService = new();
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _voiceCommandParser =
+            CreateVoiceCommandParser();
 
         _audioRecorder.RecordingCompleted +=
             AudioRecorder_RecordingCompleted;
@@ -406,6 +410,31 @@ public partial class MainWindow : Window
                 ? parsed.TextValue ?? string.Empty
                 : parsed.NumericValue?.ToString() ??
                 string.Empty;
+    }
+
+    private VoiceCommandParser CreateVoiceCommandParser()
+    {
+        try
+        {
+            IReadOnlyDictionary<string, string> aliases =
+                _airlineAliasService.Load();
+
+            AirlineDataStatusText.Text =
+                $"Loaded {aliases.Count} airline callsigns from:\n" +
+                _airlineAliasService.AirlineFilePath;
+
+            return new VoiceCommandParser(aliases);
+        }
+        catch (Exception exception)
+        {
+            AirlineDataStatusText.Text =
+                "The installed eATS airline data could not be loaded. " +
+                $"Using {FallbackAirlineAliases.Count} built-in aliases.\n" +
+                exception.Message;
+
+            return new VoiceCommandParser(
+                FallbackAirlineAliases);
+        }
     }
 
 }
