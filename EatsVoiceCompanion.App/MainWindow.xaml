@@ -258,18 +258,30 @@
                                       Tag="Climb"/>
                         <ComboBoxItem Content="Descend and maintain"
                                       Tag="Descend"/>
+                        <ComboBoxItem Content="Descend via"
+                                      Tag="DescendVia"/>
+                        <ComboBoxItem Content="Descend via except maintain"
+                                      Tag="DescendViaExceptMaintain"/>
                         <ComboBoxItem Content="Maintain speed"
                                       Tag="Speed"/>
                         <ComboBoxItem Content="Proceed direct"
                                       Tag="Direct"/>
+                        <ComboBoxItem Content="Cross fix at altitude"
+                                      Tag="CrossAltitude"/>
+                        <ComboBoxItem Content="Cross fix at altitude and speed"
+                                      Tag="CrossAltitudeSpeed"/>
+                        <ComboBoxItem Content="Altimeter"
+                                      Tag="Altimeter"/>
                         <ComboBoxItem Content="Roger / acknowledge"
                                       Tag="Roger"/>
+                        <ComboBoxItem Content="Combined eATS tokens"
+                                      Tag="Combined"/>
                     </ComboBox>
 
                     <TextBlock Grid.Row="2"
                                Grid.Column="0"
                                Margin="0,7,10,7"
-                               Text="Value:"/>
+                               Text="Value(s):"/>
 
                     <TextBox x:Name="CommandValueTextBox"
                              Grid.Row="2"

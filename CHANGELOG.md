@@ -10,12 +10,14 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 - Cobertura code-coverage collection, validation, summaries, and downloadable CI artifacts
 - Explicit stage-only entry of freshly verified commands into the eATS radio-command field, with foreground/process checks and no final Enter key
+- Ordered combined-instruction parsing with whole-preview allowlist validation
+- Crossing-altitude, combined crossing-altitude/speed, altimeter, descend-via, and descend-via-except-maintain commands
+- A command catalog documenting supported mappings, safety constraints, and planned command groups
 
 ### Planned
 
-- Combined spoken instructions
 - General-aviation callsign phraseology
-- Additional eATS commands
+- Additional route, speed, approach, communication, holding, transponder, and initial-clearance commands
 
 ## [0.1.0] - 2026-09-06
 

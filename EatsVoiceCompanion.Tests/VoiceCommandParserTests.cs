@@ -1,4 +1,5 @@
 using EatsVoiceCompanion.Core.Speech;
+using EatsVoiceCompanion.Core.Commands;
 
 namespace EatsVoiceCompanion.Tests;
 
@@ -85,6 +86,81 @@ public sealed class VoiceCommandParserTests
             parsed.ToEatsCommand());
     }
 
+    [Theory]
+    [InlineData(
+        "American 1307 cross OZZZI at and maintain one two thousand at two five zero knots",
+        "AAL1307 XOZZZI@120@250K")]
+    [InlineData(
+        "American 1307 cross OZZZI at 12,000",
+        "AAL1307 XOZZZI@120")]
+    [InlineData(
+        "American 1307 the Atlanta altimeter 29.92",
+        "AAL1307 A2992")]
+    [InlineData(
+        "American 1307 descend via",
+        "AAL1307 DV")]
+    [InlineData(
+        "American 1307 descend via except maintain one two thousand",
+        "AAL1307 DVXM120")]
+    public void Parse_AcceptsDocumentedEatsCommandFamilies(
+        string transcript,
+        string expected)
+    {
+        Assert.Equal(expected, _parser.Parse(transcript).ToEatsCommand());
+    }
+
+    [Fact]
+    public void Parse_AcceptsCombinedCrossingAndAltimeter()
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(
+            "American 1307 cross OZZZI at and maintain " +
+            "one two thousand at two five zero knots, " +
+            "the Atlanta altimeter two niner niner two");
+
+        Assert.Equal(2, parsed.Instructions.Count);
+        Assert.Equal(
+            "AAL1307 XOZZZI@120@250K A2992",
+            parsed.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Parse_AcceptsMultipleIndependentInstructions()
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(
+            "Delta 123 turn left heading two seven zero, " +
+            "then descend and maintain one zero thousand, " +
+            "and maintain speed two five zero knots");
+
+        Assert.Equal(3, parsed.Instructions.Count);
+        Assert.Equal(
+            "DAL123 TLH270 DM100 S250",
+            parsed.ToEatsCommand());
+    }
+
+    [Theory]
+    [InlineData(
+        "American 1307 cross OZZZI at and maintain " +
+        "one two thousand at two five niner knots")]
+    [InlineData(
+        "American 1307 cross OZZZI at or above one two thousand")]
+    [InlineData(
+        "American 1307 descend via the EAGUL Six arrival")]
+    public void Parse_RejectsUnsafeOrUnverifiableClearances(
+        string transcript)
+    {
+        ParsedVoiceCommand? parsed = null;
+
+        Exception exception = Record.Exception(
+            () =>
+            {
+                parsed = _parser.Parse(transcript);
+                EatsTransmissionValidator.Validate(
+                    parsed.ToEatsCommand());
+            });
+
+        Assert.NotNull(exception);
+    }
+
     [Fact]
     public void Parse_DoesNotIgnoreUnconfiguredPosition()
     {
@@ -104,6 +180,14 @@ public sealed class VoiceCommandParserTests
     {
         Assert.Throws<InvalidOperationException>(
             () => _parser.Parse(transcript));
+    }
+
+    [Fact]
+    public void Parse_RejectsEntireSequenceWhenLaterClauseIsUnsupported()
+    {
+        Assert.Throws<InvalidOperationException>(
+            () => _parser.Parse(
+                "Delta 123 turn left heading 270 then contact tower"));
     }
 
     [Fact]

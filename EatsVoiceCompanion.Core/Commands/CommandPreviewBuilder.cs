@@ -31,12 +31,29 @@ public static class CommandPreviewBuilder
                 EatsCommandFormatter.DescendAndMaintain(
                     ParseNumber(value, "altitude")),
 
+            VoiceInstructionType.DescendVia =>
+                EatsCommandFormatter.DescendVia(),
+
+            VoiceInstructionType.DescendViaExceptMaintain =>
+                EatsCommandFormatter.DescendViaExceptMaintain(
+                    ParseNumber(value, "altitude")),
+
             VoiceInstructionType.MaintainSpeed =>
                 EatsCommandFormatter.MaintainSpeed(
                     ParseNumber(value, "speed")),
 
             VoiceInstructionType.ProceedDirect =>
                 EatsCommandFormatter.ProceedDirect(value!),
+
+            VoiceInstructionType.CrossAtAltitude =>
+                BuildCrossAtAltitude(value),
+
+            VoiceInstructionType.CrossAtAltitudeAndSpeed =>
+                BuildCrossAtAltitudeAndSpeed(value),
+
+            VoiceInstructionType.Altimeter =>
+                EatsCommandFormatter.Altimeter(
+                    ParseNumber(value, "altimeter setting")),
 
             VoiceInstructionType.Roger =>
                 EatsCommandFormatter.Roger(),
@@ -53,6 +70,67 @@ public static class CommandPreviewBuilder
 
         return EatsTransmissionValidator.Validate(
             transmission);
+    }
+
+    public static string BuildCombined(
+        string callsign,
+        string? instructionTokens)
+    {
+        if (string.IsNullOrWhiteSpace(instructionTokens))
+        {
+            throw new ArgumentException(
+                "Enter at least one eATS instruction token.",
+                nameof(instructionTokens));
+        }
+
+        string transmission = EatsCommandFormatter.BuildTransmission(
+            callsign,
+            instructionTokens.Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries));
+
+        return EatsTransmissionValidator.Validate(transmission);
+    }
+
+    private static string BuildCrossAtAltitude(string? value)
+    {
+        string[] values = SplitValues(value, 2, "fix and altitude");
+
+        return EatsCommandFormatter.CrossAtAltitude(
+            values[0],
+            ParseNumber(values[1], "altitude"));
+    }
+
+    private static string BuildCrossAtAltitudeAndSpeed(string? value)
+    {
+        string[] values = SplitValues(
+            value,
+            3,
+            "fix, altitude, and speed");
+
+        return EatsCommandFormatter.CrossAtAltitudeAndSpeed(
+            values[0],
+            ParseNumber(values[1], "altitude"),
+            ParseNumber(values[2], "speed"));
+    }
+
+    private static string[] SplitValues(
+        string? value,
+        int expectedCount,
+        string description)
+    {
+        string[] values = value?.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+
+        if (values.Length != expectedCount)
+        {
+            throw new ArgumentException(
+                $"Enter the {description}, separated by spaces.",
+                nameof(value));
+        }
+
+        return values;
     }
 
     private static int ParseNumber(

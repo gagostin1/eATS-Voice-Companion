@@ -19,7 +19,7 @@ The current workflow records a controller transmission, transcribes it locally w
 - Reads active aircraft from eATS `SnapshotAuto.txt` without modifying either file
 - Adds active airline callsigns to the speech-recognition prompt to improve callsign recognition
 - Supports an optional controller position in transmissions, such as `American 1307, Atlanta Center, ...`
-- Converts recognized transmissions into editable eATS command previews
+- Converts single or combined recognized instructions into editable eATS command previews
 - Detects a running eATS process and displays basic process information
 - Classifies previews as verified, preview-only, or blocked using exact callsign matching against a fresh snapshot
 - Rejects previews that fall outside a strict allowlist of supported eATS command tokens and characters
@@ -40,8 +40,13 @@ Supported instructions:
 | Turn right heading | `DAL123 TRH270` |
 | Climb and maintain | `DAL123 CM230` |
 | Descend and maintain | `DAL123 DM100` |
+| Descend via | `DAL123 DV` |
+| Descend via except maintain | `DAL123 DVXM120` |
 | Maintain speed | `DAL123 S250` |
 | Proceed direct | `DAL123 ..LOZIT` |
+| Cross a fix at an altitude | `DAL123 XOZZZI@120` |
+| Cross a fix at an altitude and speed | `DAL123 XOZZZI@120@250K` |
+| Altimeter | `DAL123 A2992` |
 | Roger or welcome | `DAL123 R` |
 
 Examples of accepted phraseology include:
@@ -50,8 +55,12 @@ Examples of accepted phraseology include:
 Delta one two three, turn left heading two seven zero.
 United seven fourteen, climb and maintain flight level two three zero.
 American four five, descend and maintain one zero thousand five hundred.
+American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
 American thirteen oh seven, Atlanta Center, welcome.
 ```
+
+See the [command catalog](docs/COMMAND_CATALOG.md) for manual value formats,
+combined-command behavior, safety restrictions, and the planned command groups.
 
 ## Safety behavior
 
@@ -63,7 +72,9 @@ The preview displays one of three callsign states:
 
 Snapshot context is loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` about once per minute while the simulation is active.
 
-Every generated preview also passes through a final grammar allowlist. Only uppercase letters, digits, spaces, periods, valid callsigns, and the currently supported command tokens are accepted. Control characters and unknown tokens are rejected before staging can receive them.
+Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them.
+
+The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
 Only a green, freshly revalidated command can be staged. After confirmation, the application verifies that the detected window still belongs to eATS, brings it to the foreground, clears incomplete input with **Esc**, enters the radio-command field, and types the validated command. Focus is checked before every input phase. The final Enter key is never generated; the controller must inspect and transmit the command manually.
 
@@ -147,7 +158,7 @@ The data directory can be changed in the application and is saved locally. The a
 2. Start eATS Voice Companion and select the intended microphone.
 3. Review the settings, including the eATS data path and snapshot freshness, and choose **Save settings** after making changes.
 4. Enter the exact controller position you plan to say, if any.
-5. Hold **Hold to record**, speak one supported instruction, and release the button.
+5. Hold **Hold to record**, speak one or more supported instructions, and release the button.
 6. Choose **Cancel transcription** if recognition needs to be stopped.
 7. Review the transcript and generated command.
 8. Confirm that the callsign safety message matches the expected active aircraft.
@@ -158,7 +169,8 @@ The data directory can be changed in the application and is saved locally. The a
 ## Known limitations
 
 - The application supports airline callsigns but does not yet parse spoken general-aviation registration callsigns such as N-numbers.
-- Each spoken transmission produces one command instruction or an acknowledgment; combined instructions are not yet parsed from speech.
+- Named STARs in descend-via phraseology are not yet accepted because the application cannot verify a spoken procedure name against the aircraft's current route.
+- At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
 - Recognition uses the English `base.en` Whisper model and does not expose confidence scoring.
 - Tests cover core behavior and file/service integration, but actual microphone hardware and WPF interaction still require manual testing.
 - Stage-only entry depends on Windows foreground input; it aborts if eATS loses focus, and both applications should run at the same Windows privilege level.
@@ -174,7 +186,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Support more eATS commands and combined controller instructions
+- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with route-aware STAR and published-speed instructions
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases

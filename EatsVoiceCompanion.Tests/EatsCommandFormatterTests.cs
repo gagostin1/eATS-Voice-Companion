@@ -79,6 +79,25 @@ public sealed class EatsCommandFormatterTests
     }
 
     [Fact]
+    public void NewAltitudeCommands_UseDocumentedEatsSyntax()
+    {
+        Assert.Equal("DV", EatsCommandFormatter.DescendVia());
+        Assert.Equal(
+            "DVXM120",
+            EatsCommandFormatter.DescendViaExceptMaintain(12000));
+        Assert.Equal(
+            "XOZZZI@120",
+            EatsCommandFormatter.CrossAtAltitude("ozzzi", 12000));
+        Assert.Equal(
+            "XOZZZI@120@250K",
+            EatsCommandFormatter.CrossAtAltitudeAndSpeed(
+                "ozzzi",
+                12000,
+                250));
+        Assert.Equal("A2992", EatsCommandFormatter.Altimeter(2992));
+    }
+
+    [Fact]
     public void ProceedDirect_NormalizesFixName()
     {
         string result = EatsCommandFormatter.ProceedDirect("lozit");
@@ -112,6 +131,13 @@ public sealed class EatsCommandFormatterTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => EatsCommandFormatter.MaintainSpeed(speed));
+    }
+
+    [Fact]
+    public void SpeedOutsideFiveKnotIncrement_IsRejected()
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsCommandFormatter.MaintainSpeed(259));
     }
 
     [Fact]

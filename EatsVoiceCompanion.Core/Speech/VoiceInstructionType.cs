@@ -7,7 +7,12 @@ public enum VoiceInstructionType
     TurnRightHeading,
     ClimbAndMaintain,
     DescendAndMaintain,
+    DescendVia,
+    DescendViaExceptMaintain,
     MaintainSpeed,
     ProceedDirect,
+    CrossAtAltitude,
+    CrossAtAltitudeAndSpeed,
+    Altimeter,
     Roger
 }

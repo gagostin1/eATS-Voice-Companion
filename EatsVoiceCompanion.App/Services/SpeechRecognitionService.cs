@@ -29,7 +29,10 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "United seven fourteen. " +
     "American five twenty-one. " +
     "Asiana twenty-five. " +
-    "Descend and maintain. Maintain speed. Proceed direct.";
+    "Descend and maintain. Maintain speed. Proceed direct. " +
+    "Cross OZZZI at and maintain one two thousand at two five zero knots. " +
+    "The Atlanta altimeter two niner niner two. " +
+    "Descend via. Descend via except maintain one two thousand.";
 
     private readonly AppLogger? _logger;
     private bool _modelValidated;

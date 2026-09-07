@@ -4,7 +4,7 @@ namespace EatsVoiceCompanion.Core.Speech;
 
 public sealed class VoiceCommandParser
 {
-    private static readonly CommandPattern[] Patterns =
+    private static readonly CommandPattern[] ValuePatterns =
     {
         new(
             "climb and maintain flight level",
@@ -30,11 +30,18 @@ public sealed class VoiceCommandParser
 
         new(
             "climb and maintain",
-            VoiceInstructionType.ClimbAndMaintain),
+            VoiceInstructionType.ClimbAndMaintain,
+            IsAltitude: true),
 
         new(
             "descend and maintain",
-            VoiceInstructionType.DescendAndMaintain),
+            VoiceInstructionType.DescendAndMaintain,
+            IsAltitude: true),
+
+        new(
+            "descend via except maintain",
+            VoiceInstructionType.DescendViaExceptMaintain,
+            IsAltitude: true),
 
         new(
             "maintain speed",
@@ -42,12 +49,28 @@ public sealed class VoiceCommandParser
 
         new(
             "proceed direct to",
-            VoiceInstructionType.ProceedDirect),
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true),
 
         new(
             "proceed direct",
-            VoiceInstructionType.ProceedDirect)
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true)
     };
+
+    private static readonly string[] InstructionStartPhrases =
+        ValuePatterns
+            .Select(pattern => pattern.Phrase)
+            .Concat(new[]
+            {
+                "descend via",
+                "cross",
+                "the",
+                "welcome",
+                "roger"
+            })
+            .OrderByDescending(phrase => phrase.Length)
+            .ToArray();
 
     private readonly AirlineCallsignParser _callsignParser;
 
@@ -69,89 +92,384 @@ public sealed class VoiceCommandParser
                 nameof(transcript));
         }
 
-        string normalized = NormalizeWords(transcript);
-
-        normalized = RemoveControllerPosition(
-            normalized,
+        string normalized = RemoveControllerPosition(
+            NormalizeWords(transcript),
             controllerPosition);
 
-        ParsedVoiceCommand? acknowledgment =
-            TryParseAcknowledgment(normalized);
+        int instructionStart = FindInstructionStart(normalized);
 
-        if (acknowledgment is not null)
+        if (instructionStart <= 0)
         {
-            return acknowledgment;
+            throw new InvalidOperationException(
+                "No supported instruction was recognized.");
         }
 
-        foreach (CommandPattern pattern in Patterns)
+        string callsign = _callsignParser.Parse(
+            normalized[..instructionStart].Trim());
+
+        string instructionText =
+            normalized[instructionStart..].Trim();
+
+        IReadOnlyList<ParsedVoiceInstruction> instructions =
+            ParseInstructionSequence(instructionText);
+
+        return new ParsedVoiceCommand(callsign, instructions);
+    }
+
+    private static IReadOnlyList<ParsedVoiceInstruction>
+        ParseInstructionSequence(string instructionText)
+    {
+        List<ParsedVoiceInstruction> instructions = new();
+        string remaining = instructionText;
+
+        while (remaining.Length > 0)
         {
-            string separator = $" {pattern.Phrase} ";
+            remaining = RemoveLeadingConnector(remaining);
 
-            int separatorIndex = normalized.IndexOf(
-                separator,
-                StringComparison.OrdinalIgnoreCase);
-
-            if (separatorIndex <= 0)
+            if (remaining is "welcome" or "roger")
             {
+                instructions.Add(
+                    new ParsedVoiceInstruction(
+                        VoiceInstructionType.Roger));
+                remaining = string.Empty;
                 continue;
             }
 
-            string callsignText =
-                normalized[..separatorIndex];
-
-            string valueText =
-                normalized[
-                    (separatorIndex + separator.Length)..];
-
-            if (string.IsNullOrWhiteSpace(valueText))
+            if (remaining.StartsWith(
+                    "cross ",
+                    StringComparison.Ordinal))
             {
-                throw new ArgumentException(
-                    "The instruction value is missing.",
-                    nameof(transcript));
+                var result = ParseCrossingRestriction(remaining);
+                instructions.Add(result.Instruction);
+                remaining = result.Remaining;
+                continue;
             }
 
-            string callsign =
-                _callsignParser.Parse(callsignText);
-
-            if (pattern.InstructionType ==
-                VoiceInstructionType.ProceedDirect)
+            if (remaining.StartsWith(
+                    "the ",
+                    StringComparison.Ordinal))
             {
-                return new ParsedVoiceCommand(
-                    callsign,
-                    pattern.InstructionType,
-                    TextValue: ParseFix(valueText));
+                var result = ParseAltimeter(remaining);
+                instructions.Add(result.Instruction);
+                remaining = result.Remaining;
+                continue;
             }
 
-            int numericValue;
+            CommandPattern? pattern = ValuePatterns.FirstOrDefault(
+                candidate => StartsWithPhrase(
+                    remaining,
+                    candidate.Phrase));
 
-            if (pattern.IsFlightLevel)
+            if (pattern is not null)
             {
-                int flightLevel =
-                    AviationNumberParser.Parse(valueText);
+                string valueAndRest =
+                    remaining[pattern.Phrase.Length..].Trim();
 
-                numericValue = checked(flightLevel * 100);
-            }
-            else if (pattern.InstructionType is
-                    VoiceInstructionType.ClimbAndMaintain or
-                    VoiceInstructionType.DescendAndMaintain)
-            {
-                numericValue =
-                    AviationAltitudeParser.Parse(valueText);
-            }
-            else
-            {
-                numericValue =
-                    AviationNumberParser.Parse(valueText);
+                var result = TakeValue(valueAndRest);
+
+                instructions.Add(
+                    ParseValueInstruction(pattern, result.Value));
+                remaining = result.Remaining;
+                continue;
             }
 
-            return new ParsedVoiceCommand(
-                callsign,
-                pattern.InstructionType,
-                NumericValue: numericValue);
+            if (StartsWithPhrase(remaining, "descend via"))
+            {
+                instructions.Add(
+                    new ParsedVoiceInstruction(
+                        VoiceInstructionType.DescendVia));
+
+                remaining = remaining["descend via".Length..].Trim();
+
+                if (remaining.Length > 0 &&
+                    !StartsWithInstructionOrConnector(remaining))
+                {
+                    throw new InvalidOperationException(
+                        "Named descend-via procedures cannot yet be " +
+                        "verified against the aircraft route.");
+                }
+
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"The remaining instruction was not recognized: " +
+                $"'{remaining}'.");
         }
 
-        throw new InvalidOperationException(
-            "No supported instruction was recognized.");
+        if (instructions.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No supported instruction was recognized.");
+        }
+
+        return instructions;
+    }
+
+    private static ParsedVoiceInstruction ParseValueInstruction(
+        CommandPattern pattern,
+        string value)
+    {
+        if (value.Length == 0)
+        {
+            throw new ArgumentException(
+                "The instruction value is missing.",
+                nameof(value));
+        }
+
+        if (pattern.IsFix)
+        {
+            return new ParsedVoiceInstruction(
+                pattern.InstructionType,
+                TextValue: ParseFix(value));
+        }
+
+        if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed &&
+            value.EndsWith(" knots", StringComparison.Ordinal))
+        {
+            value = value[..^" knots".Length].Trim();
+        }
+
+        int numericValue = pattern.IsFlightLevel
+            ? checked(AviationNumberParser.Parse(value) * 100)
+            : pattern.IsAltitude
+                ? AviationAltitudeParser.Parse(value)
+                : AviationNumberParser.Parse(value);
+
+        return new ParsedVoiceInstruction(
+            pattern.InstructionType,
+            NumericValue: numericValue);
+    }
+
+    private static (
+        ParsedVoiceInstruction Instruction,
+        string Remaining) ParseCrossingRestriction(string value)
+    {
+        string afterCross = value["cross ".Length..].Trim();
+        int firstSpace = afterCross.IndexOf(' ');
+
+        if (firstSpace <= 0)
+        {
+            throw new ArgumentException(
+                "A crossing restriction requires a fix and altitude.",
+                nameof(value));
+        }
+
+        string fix = ParseFix(afterCross[..firstSpace]);
+        string restriction = afterCross[(firstSpace + 1)..].Trim();
+        const string atAndMaintain = "at and maintain ";
+        const string at = "at ";
+
+        if (restriction.StartsWith(
+                "at or above ",
+                StringComparison.Ordinal) ||
+            restriction.StartsWith(
+                "at or below ",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "eATS does not provide an at-or-above or at-or-below " +
+                "crossing command in the supplied radio reference.");
+        }
+
+        if (restriction.StartsWith(
+                atAndMaintain,
+                StringComparison.Ordinal))
+        {
+            restriction = restriction[atAndMaintain.Length..].Trim();
+        }
+        else if (restriction.StartsWith(at, StringComparison.Ordinal))
+        {
+            restriction = restriction[at.Length..].Trim();
+        }
+        else
+        {
+            throw new ArgumentException(
+                "A crossing restriction must say 'at' or " +
+                "'at and maintain'.",
+                nameof(value));
+        }
+
+        int speedSeparator = restriction.IndexOf(
+            " at ",
+            StringComparison.Ordinal);
+
+        if (speedSeparator >= 0)
+        {
+            string altitudeText = restriction[..speedSeparator].Trim();
+            string speedAndRest = restriction[(speedSeparator + 4)..];
+            int knotsEnd = speedAndRest.IndexOf(
+                " knots",
+                StringComparison.Ordinal);
+
+            if (knotsEnd <= 0)
+            {
+                throw new ArgumentException(
+                    "A combined crossing restriction must end its " +
+                    "speed with 'knots'.",
+                    nameof(value));
+            }
+
+            string speedText = speedAndRest[..knotsEnd].Trim();
+            string remaining = speedAndRest[
+                (knotsEnd + " knots".Length)..].Trim();
+
+            return (
+                new ParsedVoiceInstruction(
+                    VoiceInstructionType.CrossAtAltitudeAndSpeed,
+                    NumericValue: AviationAltitudeParser.Parse(altitudeText),
+                    TextValue: fix,
+                    SecondaryNumericValue:
+                        AviationNumberParser.Parse(speedText)),
+                remaining);
+        }
+
+        (string altitude, string remainingAfterAltitude) =
+            TakeValue(restriction);
+
+        return (
+            new ParsedVoiceInstruction(
+                VoiceInstructionType.CrossAtAltitude,
+                NumericValue: AviationAltitudeParser.Parse(altitude),
+                TextValue: fix),
+            remainingAfterAltitude);
+    }
+
+    private static (
+        ParsedVoiceInstruction Instruction,
+        string Remaining) ParseAltimeter(string value)
+    {
+        string withoutThe = value["the ".Length..];
+        int separator = withoutThe.IndexOf(
+            " altimeter ",
+            StringComparison.Ordinal);
+
+        if (separator <= 0)
+        {
+            throw new ArgumentException(
+                "An altimeter instruction requires a facility name.",
+                nameof(value));
+        }
+
+        string facility = withoutThe[..separator].Trim();
+        string settingAndRest = withoutThe[
+            (separator + " altimeter ".Length)..].Trim();
+        (string setting, string remaining) = TakeValue(settingAndRest);
+
+        int numericSetting = AviationNumberParser.Parse(setting);
+
+        if (numericSetting is < 1000 or > 9999)
+        {
+            throw new ArgumentException(
+                "An altimeter setting must contain four digits.",
+                nameof(value));
+        }
+
+        return (
+            new ParsedVoiceInstruction(
+                VoiceInstructionType.Altimeter,
+                NumericValue: numericSetting,
+                TextValue: facility),
+            remaining);
+    }
+
+    private static (string Value, string Remaining) TakeValue(
+        string valueAndRest)
+    {
+        if (valueAndRest.Length == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        int boundary = FindNextInstructionBoundary(valueAndRest);
+
+        if (boundary < 0)
+        {
+            return (valueAndRest.Trim(), string.Empty);
+        }
+
+        return (
+            valueAndRest[..boundary].Trim(),
+            valueAndRest[boundary..].Trim());
+    }
+
+    private static int FindNextInstructionBoundary(string value)
+    {
+        int earliest = -1;
+
+        foreach (string connector in new[] { " then ", " and " })
+        {
+            int index = value.IndexOf(connector, StringComparison.Ordinal);
+
+            if (index > 0 && (earliest < 0 || index < earliest))
+            {
+                earliest = index;
+            }
+        }
+
+        foreach (string phrase in InstructionStartPhrases)
+        {
+            int index = value.IndexOf(
+                " " + phrase,
+                StringComparison.Ordinal);
+
+            if (index > 0 && (earliest < 0 || index < earliest))
+            {
+                earliest = index;
+            }
+        }
+
+        return earliest;
+    }
+
+    private static string RemoveLeadingConnector(string value)
+    {
+        foreach (string connector in new[] { "then ", "and " })
+        {
+            if (value.StartsWith(connector, StringComparison.Ordinal))
+            {
+                return value[connector.Length..].Trim();
+            }
+        }
+
+        return value;
+    }
+
+    private static bool StartsWithInstructionOrConnector(string value)
+    {
+        if (value.StartsWith("then ", StringComparison.Ordinal) ||
+            value.StartsWith("and ", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return InstructionStartPhrases.Any(
+            phrase => StartsWithPhrase(value, phrase));
+    }
+
+    private static bool StartsWithPhrase(string value, string phrase)
+    {
+        return string.Equals(value, phrase, StringComparison.Ordinal) ||
+               value.StartsWith(phrase + " ", StringComparison.Ordinal);
+    }
+
+    private static int FindInstructionStart(string value)
+    {
+        int earliest = -1;
+
+        foreach (string phrase in InstructionStartPhrases)
+        {
+            int index = value.IndexOf(
+                " " + phrase,
+                StringComparison.Ordinal);
+
+            if (index > 0 && (earliest < 0 || index + 1 < earliest))
+            {
+                earliest = index + 1;
+            }
+        }
+
+        return earliest;
     }
 
     private static string ParseFix(string value)
@@ -159,8 +477,7 @@ public sealed class VoiceCommandParser
         if (value.Contains(' '))
         {
             throw new ArgumentException(
-                "A direct-to fix must be recognized " +
-                "as one continuous word.",
+                "A fix must be recognized as one continuous word.",
                 nameof(value));
         }
 
@@ -180,43 +497,6 @@ public sealed class VoiceCommandParser
             " ").Trim();
     }
 
-    private ParsedVoiceCommand? TryParseAcknowledgment(
-        string normalizedTranscript)
-    {
-        string[] acknowledgmentWords =
-        {
-            "welcome",
-            "roger"
-        };
-
-        foreach (string acknowledgmentWord
-                in acknowledgmentWords)
-        {
-            string suffix =
-                " " + acknowledgmentWord;
-
-            if (!normalizedTranscript.EndsWith(
-                    suffix,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            string callsignText =
-                normalizedTranscript[..^suffix.Length]
-                    .Trim();
-
-            string callsign =
-                _callsignParser.Parse(callsignText);
-
-            return new ParsedVoiceCommand(
-                callsign,
-                VoiceInstructionType.Roger);
-        }
-
-        return null;
-    }
-
     private static string RemoveControllerPosition(
         string normalizedTranscript,
         string? controllerPosition)
@@ -226,21 +506,17 @@ public sealed class VoiceCommandParser
             return normalizedTranscript;
         }
 
-        string normalizedPosition =
-            NormalizeWords(controllerPosition);
+        string normalizedPosition = NormalizeWords(controllerPosition);
 
         if (normalizedPosition.Length == 0)
         {
             return normalizedTranscript;
         }
 
-        string positionWithSpaces =
-            $" {normalizedPosition} ";
-
-        int positionIndex =
-            normalizedTranscript.IndexOf(
-                positionWithSpaces,
-                StringComparison.OrdinalIgnoreCase);
+        string positionWithSpaces = $" {normalizedPosition} ";
+        int positionIndex = normalizedTranscript.IndexOf(
+            positionWithSpaces,
+            StringComparison.OrdinalIgnoreCase);
 
         if (positionIndex <= 0)
         {
@@ -248,14 +524,14 @@ public sealed class VoiceCommandParser
         }
 
         return normalizedTranscript
-            .Remove(
-                positionIndex,
-                positionWithSpaces.Length)
+            .Remove(positionIndex, positionWithSpaces.Length)
             .Insert(positionIndex, " ");
     }
 
     private sealed record CommandPattern(
         string Phrase,
         VoiceInstructionType InstructionType,
-        bool IsFlightLevel = false);
+        bool IsFlightLevel = false,
+        bool IsAltitude = false,
+        bool IsFix = false);
 }

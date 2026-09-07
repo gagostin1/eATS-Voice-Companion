@@ -30,4 +30,50 @@ public sealed class CommandPreviewBuilderTests
                 VoiceInstructionType.FlyHeading,
                 "west"));
     }
+
+    [Theory]
+    [InlineData(
+        VoiceInstructionType.CrossAtAltitude,
+        "OZZZI 12000",
+        "DAL123 XOZZZI@120")]
+    [InlineData(
+        VoiceInstructionType.CrossAtAltitudeAndSpeed,
+        "OZZZI 12000 250",
+        "DAL123 XOZZZI@120@250K")]
+    [InlineData(
+        VoiceInstructionType.DescendVia,
+        "",
+        "DAL123 DV")]
+    [InlineData(
+        VoiceInstructionType.DescendViaExceptMaintain,
+        "12000",
+        "DAL123 DVXM120")]
+    [InlineData(
+        VoiceInstructionType.Altimeter,
+        "2992",
+        "DAL123 A2992")]
+    public void Build_ReturnsNewCommandFamilies(
+        VoiceInstructionType type,
+        string value,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            CommandPreviewBuilder.Build("DAL123", type, value));
+    }
+
+    [Fact]
+    public void BuildCombined_ValidatesEveryToken()
+    {
+        Assert.Equal(
+            "DAL123 XOZZZI@120@250K A2992",
+            CommandPreviewBuilder.BuildCombined(
+                "DAL123",
+                "XOZZZI@120@250K A2992"));
+
+        Assert.Throws<ArgumentException>(
+            () => CommandPreviewBuilder.BuildCombined(
+                "DAL123",
+                "XOZZZI@120 BAD"));
+    }
 }

@@ -40,7 +40,9 @@ public static partial class EatsTransmissionValidator
                 nameof(transmission));
         }
 
-        foreach (string instruction in tokens.Skip(1))
+        string[] instructions = tokens.Skip(1).ToArray();
+
+        foreach (string instruction in instructions)
         {
             if (!IsAllowedInstruction(instruction))
             {
@@ -50,12 +52,18 @@ public static partial class EatsTransmissionValidator
             }
         }
 
+        ValidateInstructionOrder(instructions);
+
         return normalized;
     }
 
     private static bool IsAllowedInstruction(string instruction)
     {
-        if (instruction == "R" || DirectPattern().IsMatch(instruction))
+        if (instruction is "R" or "DV" ||
+            DirectPattern().IsMatch(instruction) ||
+            AltimeterPattern().IsMatch(instruction) ||
+            CrossAtPattern().IsMatch(instruction) &&
+                IsValidCrossAt(instruction))
         {
             return true;
         }
@@ -84,8 +92,84 @@ public static partial class EatsTransmissionValidator
                        checked(value * 100))) ||
                IsFormattedNumber(
                    instruction,
+                   "DVXM",
+                   value => EatsCommandFormatter.DescendViaExceptMaintain(
+                       checked(value * 100))) ||
+               IsFormattedNumber(
+                   instruction,
                    "S",
                    EatsCommandFormatter.MaintainSpeed);
+    }
+
+    private static bool IsValidCrossAt(string instruction)
+    {
+        Match match = CrossAtPattern().Match(instruction);
+
+        if (!match.Success ||
+            !int.TryParse(match.Groups["altitude"].Value, out int altitude))
+        {
+            return false;
+        }
+
+        string fix = match.Groups["fix"].Value;
+        string speedText = match.Groups["speed"].Value;
+
+        try
+        {
+            if (speedText.Length == 0)
+            {
+                return string.Equals(
+                    instruction,
+                    EatsCommandFormatter.CrossAtAltitude(
+                        fix,
+                        checked(altitude * 100)),
+                    StringComparison.Ordinal);
+            }
+
+            return int.TryParse(speedText, out int speed) &&
+                   string.Equals(
+                       instruction,
+                       EatsCommandFormatter.CrossAtAltitudeAndSpeed(
+                           fix,
+                           checked(altitude * 100),
+                           speed),
+                       StringComparison.Ordinal);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateInstructionOrder(string[] instructions)
+    {
+        int descendViaIndex = Array.FindIndex(
+            instructions,
+            instruction => instruction == "DV" ||
+                           instruction.StartsWith(
+                               "DVXM",
+                               StringComparison.Ordinal));
+
+        if (descendViaIndex <= 0)
+        {
+            return;
+        }
+
+        bool speedBeforeDescendVia = instructions
+            .Take(descendViaIndex)
+            .Any(instruction => SpeedPattern().IsMatch(instruction));
+
+        if (speedBeforeDescendVia)
+        {
+            throw new ArgumentException(
+                "A descend-via command must precede an assigned speed " +
+                "because eATS cancels earlier speed assignments.",
+                nameof(instructions));
+        }
     }
 
     private static bool IsFormattedNumber(
@@ -118,7 +202,7 @@ public static partial class EatsTransmissionValidator
         }
     }
 
-    [GeneratedRegex("\\A[A-Z0-9. ]+\\z", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("\\A[A-Z0-9.@ ]+\\z", RegexOptions.CultureInvariant)]
     private static partial Regex AllowedCharactersPattern();
 
     [GeneratedRegex("^[A-Z0-9]{2,7}$", RegexOptions.CultureInvariant)]
@@ -128,4 +212,15 @@ public static partial class EatsTransmissionValidator
         "^\\.\\.[A-Z0-9]{2,8}$",
         RegexOptions.CultureInvariant)]
     private static partial Regex DirectPattern();
+
+    [GeneratedRegex("^A[0-9]{4}$", RegexOptions.CultureInvariant)]
+    private static partial Regex AltimeterPattern();
+
+    [GeneratedRegex(
+        "^X(?<fix>[A-Z0-9]{2,8})@(?<altitude>[0-9]{2,3})(?:@(?<speed>[0-9]{3})K)?$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex CrossAtPattern();
+
+    [GeneratedRegex("^(?:M?S)[0-9]{3}$", RegexOptions.CultureInvariant)]
+    private static partial Regex SpeedPattern();
 }

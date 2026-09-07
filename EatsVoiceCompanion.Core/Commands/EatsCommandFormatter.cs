@@ -62,6 +62,16 @@ public static class EatsCommandFormatter
         return $"DM{FormatAltitude(altitudeFeet)}";
     }
 
+    public static string DescendVia()
+    {
+        return "DV";
+    }
+
+    public static string DescendViaExceptMaintain(int altitudeFeet)
+    {
+        return $"DVXM{FormatAltitude(altitudeFeet)}";
+    }
+
     public static string MaintainSpeed(int speedKnots)
     {
         if (speedKnots is < 100 or > 350)
@@ -71,10 +81,58 @@ public static class EatsCommandFormatter
                 "Speed must be between 100 and 350 knots.");
         }
 
+        if (speedKnots % 5 != 0)
+        {
+            throw new ArgumentException(
+                "Speed must be specified in 5-knot increments.",
+                nameof(speedKnots));
+        }
+
         return $"S{speedKnots}";
     }
 
+    public static string Altimeter(int setting)
+    {
+        if (setting is < 0 or > 9999)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(setting),
+                "Altimeter setting must contain exactly four digits.");
+        }
+
+        return $"A{setting:D4}";
+    }
+
+    public static string CrossAtAltitude(
+        string fix,
+        int altitudeFeet)
+    {
+        return $"X{NormalizeFix(fix)}@{FormatAltitude(altitudeFeet)}";
+    }
+
+    public static string CrossAtAltitudeAndSpeed(
+        string fix,
+        int altitudeFeet,
+        int speedKnots)
+    {
+        string speed = MaintainSpeed(speedKnots)[1..];
+
+        return $"{CrossAtAltitude(fix, altitudeFeet)}@{speed}K";
+    }
+
     public static string ProceedDirect(string fix)
+    {
+        if (string.IsNullOrWhiteSpace(fix))
+        {
+            throw new ArgumentException(
+                "A fix is required.",
+                nameof(fix));
+        }
+
+        return $"..{NormalizeFix(fix)}";
+    }
+
+    private static string NormalizeFix(string fix)
     {
         if (string.IsNullOrWhiteSpace(fix))
         {
@@ -92,7 +150,7 @@ public static class EatsCommandFormatter
                 nameof(fix));
         }
 
-        return $"..{normalizedFix}";
+        return normalizedFix;
     }
 
     private static string NormalizeCallsign(string callsign)

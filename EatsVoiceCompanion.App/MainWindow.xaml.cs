@@ -308,13 +308,16 @@ public partial class MainWindow : Window
 
         try
         {
-            VoiceInstructionType instructionType =
-                GetSelectedInstructionType();
+            string commandType = GetSelectedCommandTypeTag();
 
-            string transmission = CommandPreviewBuilder.Build(
-                CallsignTextBox.Text,
-                instructionType,
-                CommandValueTextBox.Text);
+            string transmission = commandType == "Combined"
+                ? CommandPreviewBuilder.BuildCombined(
+                    CallsignTextBox.Text,
+                    CommandValueTextBox.Text)
+                : CommandPreviewBuilder.Build(
+                    CallsignTextBox.Text,
+                    GetSelectedInstructionType(commandType),
+                    CommandValueTextBox.Text);
 
             PreviewText.Text = transmission;
             PrepareNewPreviewForStaging();
@@ -324,7 +327,7 @@ public partial class MainWindow : Window
             _logger.Information(
                 "ManualPreviewBuilt",
                 "A manual command preview was built.",
-                new { InstructionType = instructionType.ToString() });
+                new { InstructionType = commandType });
         }
         catch (Exception exception)
         {
@@ -339,7 +342,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private VoiceInstructionType GetSelectedInstructionType()
+    private string GetSelectedCommandTypeTag()
     {
         if (CommandTypeBox.SelectedItem is not ComboBoxItem selectedItem ||
             selectedItem.Tag is not string commandType)
@@ -348,6 +351,12 @@ public partial class MainWindow : Window
                 "Select an instruction type.");
         }
 
+        return commandType;
+    }
+
+    private static VoiceInstructionType GetSelectedInstructionType(
+        string commandType)
+    {
         return commandType switch
         {
             "FlyHeading" => VoiceInstructionType.FlyHeading,
@@ -355,8 +364,15 @@ public partial class MainWindow : Window
             "TurnRight" => VoiceInstructionType.TurnRightHeading,
             "Climb" => VoiceInstructionType.ClimbAndMaintain,
             "Descend" => VoiceInstructionType.DescendAndMaintain,
+            "DescendVia" => VoiceInstructionType.DescendVia,
+            "DescendViaExceptMaintain" =>
+                VoiceInstructionType.DescendViaExceptMaintain,
             "Speed" => VoiceInstructionType.MaintainSpeed,
             "Direct" => VoiceInstructionType.ProceedDirect,
+            "CrossAltitude" => VoiceInstructionType.CrossAtAltitude,
+            "CrossAltitudeSpeed" =>
+                VoiceInstructionType.CrossAtAltitudeAndSpeed,
+            "Altimeter" => VoiceInstructionType.Altimeter,
             "Roger" => VoiceInstructionType.Roger,
             _ => throw new InvalidOperationException(
                 "The selected instruction is not supported.")
@@ -854,20 +870,55 @@ public partial class MainWindow : Window
     {
         CallsignTextBox.Text = parsed.Callsign;
 
-        string commandTag = parsed.InstructionType switch
+        if (parsed.Instructions.Count > 1)
+        {
+            SelectCommandType("Combined");
+            CommandValueTextBox.Text = string.Join(
+                ' ',
+                parsed.ToEatsInstructionTokens());
+            return;
+        }
+
+        ParsedVoiceInstruction instruction = parsed.Instructions[0];
+
+        string commandTag = instruction.InstructionType switch
         {
             VoiceInstructionType.FlyHeading => "FlyHeading",
             VoiceInstructionType.TurnLeftHeading => "TurnLeft",
             VoiceInstructionType.TurnRightHeading => "TurnRight",
             VoiceInstructionType.ClimbAndMaintain => "Climb",
             VoiceInstructionType.DescendAndMaintain => "Descend",
+            VoiceInstructionType.DescendVia => "DescendVia",
+            VoiceInstructionType.DescendViaExceptMaintain =>
+                "DescendViaExceptMaintain",
             VoiceInstructionType.MaintainSpeed => "Speed",
             VoiceInstructionType.ProceedDirect => "Direct",
+            VoiceInstructionType.CrossAtAltitude => "CrossAltitude",
+            VoiceInstructionType.CrossAtAltitudeAndSpeed =>
+                "CrossAltitudeSpeed",
+            VoiceInstructionType.Altimeter => "Altimeter",
             VoiceInstructionType.Roger => "Roger",
             _ => throw new InvalidOperationException(
                 "The instruction type is not supported.")
         };
 
+        SelectCommandType(commandTag);
+
+        CommandValueTextBox.Text = instruction.InstructionType switch
+        {
+            VoiceInstructionType.ProceedDirect =>
+                instruction.TextValue ?? string.Empty,
+            VoiceInstructionType.CrossAtAltitude =>
+                $"{instruction.TextValue} {instruction.NumericValue}",
+            VoiceInstructionType.CrossAtAltitudeAndSpeed =>
+                $"{instruction.TextValue} {instruction.NumericValue} " +
+                $"{instruction.SecondaryNumericValue}",
+            _ => instruction.NumericValue?.ToString() ?? string.Empty
+        };
+    }
+
+    private void SelectCommandType(string commandTag)
+    {
         foreach (object item in CommandTypeBox.Items)
         {
             if (item is ComboBoxItem comboBoxItem &&
@@ -880,11 +931,6 @@ public partial class MainWindow : Window
                 break;
             }
         }
-
-        CommandValueTextBox.Text =
-            parsed.InstructionType == VoiceInstructionType.ProceedDirect
-                ? parsed.TextValue ?? string.Empty
-                : parsed.NumericValue?.ToString() ?? string.Empty;
     }
 
     private string BuildRecognitionContext()

@@ -20,6 +20,14 @@ public static class AviationAltitudeParser
             return numericAltitude;
         }
 
+        string compactDigits = normalized.Replace(" ", string.Empty);
+
+        if (compactDigits.All(char.IsDigit) &&
+            int.TryParse(compactDigits, out numericAltitude))
+        {
+            return numericAltitude;
+        }
+
         const string thousandWord = " thousand";
 
         int thousandIndex = normalized.IndexOf(
