@@ -2,10 +2,14 @@
 
 eATS Voice Companion is an independent Windows application that adds local voice recognition and safety-checked command previews to the eATS enroute air traffic control simulator.
 
+[Download eATS Voice Companion v0.1.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.1.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0) · [Changelog](CHANGELOG.md)
+
+[![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
+
 The current workflow records a controller transmission, transcribes it locally with Whisper, interprets supported ATC phraseology, formats the matching eATS command, and verifies the callsign against a recent eATS snapshot. It remains preview-only: it does not type into eATS or transmit commands.
 
 > [!IMPORTANT]
-> This project is an early prototype. Always verify the transcript, callsign, instruction, and value shown in the preview. A green callsign check confirms only that the exact callsign appears in a recent snapshot; it does not prove that the recognized instruction is operationally correct.
+> This project is an early pre-release. Always verify the transcript, callsign, instruction, and value shown in the preview. A green callsign check confirms only that the exact callsign appears in a recent snapshot; it does not prove that the recognized instruction is operationally correct.
 
 ## Current features
 
@@ -64,18 +68,29 @@ No generated command is currently sent to eATS. The next planned integration ste
 
 ## Requirements
 
-- Windows 11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- Windows 11 x64
 - Microsoft Visual C++ Redistributable for Visual Studio 2022 (x64)
 - A processor with AVX, AVX2, FMA, and F16C support for the included Whisper CPU runtime
 - A Windows-compatible microphone
 - eATS installed separately
 - Internet access on first use to download the Whisper model
-- Git and Visual Studio Code, Visual Studio, or another C# editor for development
 
 The application uses [NAudio](https://www.nuget.org/packages/NAudio) for recording and [Whisper.net](https://www.nuget.org/packages/Whisper.net) for local speech recognition.
 
-## Getting started
+The self-contained release includes the .NET runtime. Building from source additionally requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), Git, and Visual Studio, Visual Studio Code, or another C# editor.
+
+## Installing the pre-release
+
+1. Download [`EatsVoiceCompanion-win-x64.zip`](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.1.0/EatsVoiceCompanion-win-x64.zip) from the [v0.1.0 release](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0).
+2. Verify the package checksum shown in the release notes if desired.
+3. Extract the entire ZIP to a folder. Do not run the application from inside the ZIP archive.
+4. Start `EatsVoiceCompanion.App.exe` from the extracted folder.
+5. If Windows displays an unknown-publisher warning, confirm that the file came from this repository's release and that its SHA-256 matches before choosing whether to run it.
+6. On the first transcription, allow the application to download and verify the local Whisper model.
+
+The application does not need to be placed inside the eATS installation directory. It discovers the running simulator and reads the configured eATS data directory separately.
+
+## Building from source
 
 Clone the repository and enter its directory:
 
@@ -125,7 +140,7 @@ Airline and snapshot data are read from this default eATS data directory:
 
 The data directory can be changed in the application and is saved locally. The application does not copy eATS data files into the repository.
 
-## Using the current prototype
+## Using the application
 
 1. Start eATS, load a simulation, and allow its automatic snapshot to refresh.
 2. Start eATS Voice Companion and select the intended microphone.
@@ -159,7 +174,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 - Support more eATS commands and combined controller instructions
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
-- Add packaging, signing, and release documentation
+- Add an installer, code signing, and automated tagged releases
 
 ## Privacy
 

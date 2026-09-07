@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a reproducible application, interface, settings, or eATS-context problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Do not include proprietary eATS files, scenario data, or personal information.
+
+  - type: input
+    id: version
+    attributes:
+      label: Application version
+      description: Find this in the release name or the executable's Properties > Details page.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: How did you run the application?
+      options:
+        - GitHub release ZIP
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and any visible error message.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start eATS...
+        2. Start eATS Voice Companion...
+        3. Select...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic information
+      description: Attach the relevant JSONL log or paste only the related entries. Review attachments before uploading them.
+      placeholder: Logs are stored under %LOCALAPPDATA%\EatsVoiceCompanion\Logs
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I tested the latest available pre-release.
+          required: true
+        - label: I removed personal information and did not attach proprietary eATS files or scenario data.
+          required: true

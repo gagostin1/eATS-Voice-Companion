@@ -1,0 +1,91 @@
+name: Speech-recognition problem
+description: Report a phrase that was transcribed or interpreted incorrectly.
+title: "[Speech]: "
+labels:
+  - bug
+  - speech-recognition
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide the exact short phrase needed to reproduce the problem. Do not attach unrelated recordings, proprietary eATS files, or scenario data.
+
+  - type: input
+    id: version
+    attributes:
+      label: Application version
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: spoken
+    attributes:
+      label: Phrase spoken
+      description: Write the phrase exactly as you intended it.
+      placeholder: American 1307, Atlanta Center, climb and maintain flight level 230.
+    validations:
+      required: true
+
+  - type: textarea
+    id: transcript
+    attributes:
+      label: Transcript produced
+      description: Copy the text displayed in the Speech recognition section.
+    validations:
+      required: true
+
+  - type: input
+    id: expected_command
+    attributes:
+      label: Expected eATS preview
+      placeholder: AAL1307 CM230
+    validations:
+      required: true
+
+  - type: input
+    id: actual_result
+    attributes:
+      label: Actual preview or error
+      placeholder: Command not generated; airline callsign was not recognized.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: active_aircraft
+    attributes:
+      label: Was the exact aircraft callsign active in the current snapshot?
+      options:
+        - "Yes"
+        - "No"
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: controller_position
+    attributes:
+      label: Configured controller position
+      placeholder: Atlanta Center
+
+  - type: input
+    id: microphone
+    attributes:
+      label: Microphone
+      description: Provide the device name shown by the application.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Include whether the problem is consistent and any relevant accent, pacing, or background-noise details you are comfortable sharing.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I reproduced this with the latest available pre-release.
+          required: true
+        - label: I verified that the expected command uses currently supported syntax.
+          required: true
