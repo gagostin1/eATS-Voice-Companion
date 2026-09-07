@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly RecordingStorageService _recordingStorage;
     private readonly AudioRecorder _audioRecorder;
     private readonly SpeechRecognitionService _speechRecognitionService;
+    private readonly EatsCommandStager _commandStager;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
     private CompanionSettings _settings;
@@ -47,6 +48,10 @@ public partial class MainWindow : Window
     private IReadOnlySet<string> _activeCallsigns =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private bool _hasFreshSnapshot;
+    private CommandSafetyState _currentSafetyState =
+        CommandSafetyState.NotReady;
+    private bool _currentPreviewWasStaged;
+    private bool _isStagingCommand;
 
     public MainWindow()
     {
@@ -61,6 +66,7 @@ public partial class MainWindow : Window
         _audioRecorder = new AudioRecorder(_recordingStorage);
         _speechRecognitionService = new SpeechRecognitionService(
             logger: _logger);
+        _commandStager = new EatsCommandStager();
 
         InitializeComponent();
         ApplySettingsToUi();
@@ -311,6 +317,7 @@ public partial class MainWindow : Window
                 CommandValueTextBox.Text);
 
             PreviewText.Text = transmission;
+            PrepareNewPreviewForStaging();
             string callsign = transmission.Split(' ')[0];
             UpdateCommandSafetyStatus(callsign);
 
@@ -354,6 +361,119 @@ public partial class MainWindow : Window
             _ => throw new InvalidOperationException(
                 "The selected instruction is not supported.")
         };
+    }
+
+    private async void StageCommand_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_isStagingCommand || _currentPreviewWasStaged)
+        {
+            return;
+        }
+
+        string transmission;
+
+        try
+        {
+            BuildRecognitionContext();
+            transmission = EatsTransmissionValidator.Validate(
+                PreviewText.Text);
+            string callsign = transmission.Split(' ')[0];
+            UpdateCommandSafetyStatus(callsign);
+
+            if (_currentSafetyState != CommandSafetyState.Verified)
+            {
+                CommandStageStatusText.Foreground = Brushes.Firebrick;
+                CommandStageStatusText.Text =
+                    "The command was not staged because its callsign " +
+                    "is not freshly verified.";
+                return;
+            }
+
+            MessageBoxResult confirmation = MessageBox.Show(
+                this,
+                "Stage this verified command in eATS?\n\n" +
+                transmission +
+                "\n\nThe application will not press the final Enter key.",
+                "Stage verified command",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                CommandStageStatusText.Foreground = Brushes.DimGray;
+                CommandStageStatusText.Text = "Command staging was canceled.";
+                return;
+            }
+
+            BuildRecognitionContext();
+            UpdateCommandSafetyStatus(callsign);
+
+            if (_currentSafetyState != CommandSafetyState.Verified)
+            {
+                CommandStageStatusText.Foreground = Brushes.Firebrick;
+                CommandStageStatusText.Text =
+                    "The command was not staged because verification " +
+                    "changed while confirmation was open.";
+                return;
+            }
+
+            EatsProcessInfo? process = _detector.FindRunningInstance();
+
+            if (process is null)
+            {
+                throw new InvalidOperationException(
+                    "A running eATS window could not be found.");
+            }
+
+            _isStagingCommand = true;
+            UpdateStageButtonState();
+            CommandStageStatusText.Foreground = Brushes.DarkGoldenrod;
+            CommandStageStatusText.Text = "Staging the command in eATS...";
+
+            await _commandStager.StageAsync(
+                process,
+                transmission,
+                _lifetimeCancellation.Token);
+
+            _currentPreviewWasStaged = true;
+            CommandStageStatusText.Foreground = Brushes.ForestGreen;
+            CommandStageStatusText.Text =
+                "Command staged in eATS. Review it there, then press " +
+                "Enter yourself to transmit.";
+
+            _logger.Information(
+                "CommandStaged",
+                "A verified command was staged without transmission.",
+                new { process.ProcessId });
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // Application shutdown intentionally cancels staging.
+        }
+        catch (Exception exception)
+        {
+            _currentPreviewWasStaged = true;
+            CommandStageStatusText.Foreground = Brushes.Firebrick;
+            CommandStageStatusText.Text =
+                "Command staging did not complete: " +
+                exception.Message +
+                " Check and clear the eATS radio-command box before " +
+                "trying again.";
+
+            _logger.Error(
+                "CommandStagingFailed",
+                "A verified command could not be staged.",
+                exception);
+        }
+        finally
+        {
+            _isStagingCommand = false;
+            UpdateStageButtonState();
+        }
     }
 
     private void RefreshMicrophones_Click(
@@ -708,6 +828,7 @@ public partial class MainWindow : Window
 
             ApplyParsedCommandToEditor(parsed);
             PreviewText.Text = transmission;
+            PrepareNewPreviewForStaging();
             UpdateCommandSafetyStatus(parsed.Callsign);
             SpeechStatusText.Text =
                 "Transcription completed and command preview generated.";
@@ -790,8 +911,21 @@ public partial class MainWindow : Window
     {
         PreviewText.Text = "Command not generated.";
         PreviewErrorText.Text = error;
+        _currentPreviewWasStaged = false;
+        CommandStageStatusText.Foreground = Brushes.DimGray;
+        CommandStageStatusText.Text =
+            "Only a freshly verified command can be staged.";
         ApplySafetyStatus(
             CommandSafetyEvaluator.NotReady(notReadyReason));
+    }
+
+    private void PrepareNewPreviewForStaging()
+    {
+        _currentPreviewWasStaged = false;
+        CommandStageStatusText.Foreground = Brushes.DimGray;
+        CommandStageStatusText.Text =
+            "Verify the command, then choose Stage in eATS. " +
+            "The final Enter key is always left to you.";
     }
 
     private void UpdateCommandSafetyStatus(string callsign)
@@ -824,11 +958,22 @@ public partial class MainWindow : Window
 
     private void ApplySafetyStatus(CommandSafetyResult result)
     {
+        _currentSafetyState = result.State;
+
         CommandSafetyPresentation presentation =
             CommandSafetyPresenter.Create(result);
 
         CommandSafetyStatusText.Foreground = presentation.Foreground;
         CommandSafetyStatusText.Text = presentation.Message;
+        UpdateStageButtonState();
+    }
+
+    private void UpdateStageButtonState()
+    {
+        StageCommandButton.IsEnabled =
+            !_isStagingCommand &&
+            !_currentPreviewWasStaged &&
+            _currentSafetyState == CommandSafetyState.Verified;
     }
 
     protected override void OnClosed(EventArgs e)

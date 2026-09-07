@@ -1,12 +1,12 @@
 # eATS Voice Companion
 
-eATS Voice Companion is an independent Windows application that adds local voice recognition and safety-checked command previews to the eATS enroute air traffic control simulator.
+eATS Voice Companion is an independent Windows application that adds local voice recognition, safety-checked command previews, and explicit stage-only command entry to the eATS enroute air traffic control simulator.
 
 [Download eATS Voice Companion v0.1.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.1.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0) · [Changelog](CHANGELOG.md)
 
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
 
-The current workflow records a controller transmission, transcribes it locally with Whisper, interprets supported ATC phraseology, formats the matching eATS command, and verifies the callsign against a recent eATS snapshot. It remains preview-only: it does not type into eATS or transmit commands.
+The current workflow records a controller transmission, transcribes it locally with Whisper, interprets supported ATC phraseology, formats the matching eATS command, and verifies the callsign against a recent eATS snapshot. A controller may explicitly stage a freshly verified command in eATS for review; the application never presses the final Enter key or transmits the command automatically.
 
 > [!IMPORTANT]
 > This project is an early pre-release. Always verify the transcript, callsign, instruction, and value shown in the preview. A green callsign check confirms only that the exact callsign appears in a recent snapshot; it does not prove that the recognized instruction is operationally correct.
@@ -23,6 +23,7 @@ The current workflow records a controller transmission, transcribes it locally w
 - Detects a running eATS process and displays basic process information
 - Classifies previews as verified, preview-only, or blocked using exact callsign matching against a fresh snapshot
 - Rejects previews that fall outside a strict allowlist of supported eATS command tokens and characters
+- Stages a freshly revalidated command in the eATS radio-command field only after explicit confirmation, without pressing the final Enter key
 - Provides visible cancellation while the model is downloading or a recording is being transcribed
 - Persists the controller position, preferred microphone, eATS data path, snapshot threshold, and recording-retention policy
 - Removes expired and excess recordings using configurable age and count limits
@@ -62,9 +63,9 @@ The preview displays one of three callsign states:
 
 Snapshot context is loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` about once per minute while the simulation is active.
 
-Every generated preview also passes through a final grammar allowlist. Only uppercase letters, digits, spaces, periods, valid callsigns, and the currently supported command tokens are accepted. Control characters and unknown tokens are rejected before any future staging integration can receive them.
+Every generated preview also passes through a final grammar allowlist. Only uppercase letters, digits, spaces, periods, valid callsigns, and the currently supported command tokens are accepted. Control characters and unknown tokens are rejected before staging can receive them.
 
-No generated command is currently sent to eATS. The next planned integration step is an explicit, user-initiated staging action that types a verified preview into eATS without pressing the final Enter key.
+Only a green, freshly revalidated command can be staged. After confirmation, the application verifies that the detected window still belongs to eATS, brings it to the foreground, clears incomplete input with **Esc**, enters the radio-command field, and types the validated command. Focus is checked before every input phase. The final Enter key is never generated; the controller must inspect and transmit the command manually.
 
 ## Requirements
 
@@ -151,6 +152,8 @@ The data directory can be changed in the application and is saved locally. The a
 7. Review the transcript and generated command.
 8. Confirm that the callsign safety message matches the expected active aircraft.
 9. Edit the preview fields and choose **Build preview** if a correction is needed.
+10. Choose **Stage in eATS**, review the confirmation, and approve it only if the command is correct.
+11. Inspect the staged text in the lower-left eATS radio-command field and press **Enter** yourself only when it is safe to transmit.
 
 ## Known limitations
 
@@ -158,7 +161,8 @@ The data directory can be changed in the application and is saved locally. The a
 - Each spoken transmission produces one command instruction or an acknowledgment; combined instructions are not yet parsed from speech.
 - Recognition uses the English `base.en` Whisper model and does not expose confidence scoring.
 - Tests cover core behavior and file/service integration, but actual microphone hardware and WPF interaction still require manual testing.
-- There is no installer, signed release, command staging, or command transmission yet.
+- Stage-only entry depends on Windows foreground input; it aborts if eATS loses focus, and both applications should run at the same Windows privilege level.
+- There is no installer, signed release, or automatic command transmission.
 
 ## Project structure
 
@@ -170,7 +174,6 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Add explicit stage-only entry of a freshly verified command into eATS, without automatically transmitting it
 - Support more eATS commands and combined controller instructions
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests

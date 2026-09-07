@@ -9,13 +9,13 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 ### Added
 
 - Cobertura code-coverage collection, validation, summaries, and downloadable CI artifacts
+- Explicit stage-only entry of freshly verified commands into the eATS radio-command field, with foreground/process checks and no final Enter key
 
 ### Planned
 
 - Combined spoken instructions
 - General-aviation callsign phraseology
 - Additional eATS commands
-- Explicit stage-only eATS entry with no automatic transmission
 
 ## [0.1.0] - 2026-09-06
 

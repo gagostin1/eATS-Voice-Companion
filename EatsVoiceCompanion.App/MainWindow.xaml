@@ -14,7 +14,7 @@
 
             <TextBlock Margin="0,8,0,20"
                        Foreground="#FF555555"
-                       Text="Read-only integration and command preview"
+                       Text="Safety-checked preview and stage-only integration"
                        TextWrapping="Wrap"/>
 
             <GroupBox Header="Microphone">
@@ -217,6 +217,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <Grid.ColumnDefinitions>
@@ -277,14 +278,24 @@
                              Padding="7"
                              Text="270"/>
 
-                    <Button Grid.Row="3"
-                            Grid.Column="1"
-                            Width="150"
-                            Height="36"
-                            Margin="0,12,0,0"
-                            HorizontalAlignment="Left"
-                            Click="BuildPreview_Click"
-                            Content="Build preview"/>
+                    <StackPanel Grid.Row="3"
+                                Grid.Column="1"
+                                Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Orientation="Horizontal">
+                        <Button Width="150"
+                                Height="36"
+                                Click="BuildPreview_Click"
+                                Content="Build preview"/>
+
+                        <Button x:Name="StageCommandButton"
+                                Width="170"
+                                Height="36"
+                                Margin="10,0,0,0"
+                                Click="StageCommand_Click"
+                                Content="Stage in eATS"
+                                IsEnabled="False"/>
+                    </StackPanel>
 
                     <Border Grid.Row="4"
                             Grid.ColumnSpan="2"
@@ -318,12 +329,20 @@
                                 Foreground="#FFB36B00"
                                 Text="Preview only: no command has been validated."
                                 TextWrapping="Wrap"/>
+
+                    <TextBlock x:Name="CommandStageStatusText"
+                               Grid.Row="6"
+                               Grid.ColumnSpan="2"
+                               Margin="0,8,0,0"
+                               Foreground="#FF555555"
+                               Text="Only a freshly verified command can be staged."
+                               TextWrapping="Wrap"/>
                 </Grid>
             </GroupBox>
 
             <TextBlock Margin="0,16,0,0"
                        Foreground="#FF666666"
-                       Text="Preview mode cannot transmit commands to eATS."
+                       Text="Staging types into eATS but never presses the final Enter key. Review every staged command before transmitting it yourself."
                        TextWrapping="Wrap"/>
         </StackPanel>
     </ScrollViewer>
