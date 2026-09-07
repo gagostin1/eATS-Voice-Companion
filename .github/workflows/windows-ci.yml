@@ -42,8 +42,69 @@ jobs:
       - name: Build Release configuration
         run: dotnet build .\EatsVoiceCompanion.sln --configuration Release --no-restore -p:TreatWarningsAsErrors=true -p:AnalysisLevel=latest
 
-      - name: Run tests
-        run: dotnet test .\EatsVoiceCompanion.sln --configuration Release --no-build --no-restore --logger "console;verbosity=normal"
+      - name: Run tests and collect coverage
+        run: >-
+          dotnet test .\EatsVoiceCompanion.sln
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory .\artifacts\test-results
+          --collect "XPlat Code Coverage"
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+      - name: Validate coverage report
+        shell: pwsh
+        run: |
+          $coverageFiles = @(
+            Get-ChildItem `
+              -LiteralPath '.\artifacts\test-results' `
+              -Filter 'coverage.cobertura.xml' `
+              -Recurse `
+              -File
+          )
+
+          if ($coverageFiles.Count -eq 0) {
+            throw 'No Cobertura coverage reports were generated.'
+          }
+
+          $linesCovered = 0
+          $linesValid = 0
+
+          foreach ($coverageFile in $coverageFiles) {
+            [xml]$coverage = Get-Content -LiteralPath $coverageFile.FullName -Raw
+            $reportLinesValid = [int]$coverage.coverage.'lines-valid'
+
+            if ($reportLinesValid -le 0) {
+              throw "The coverage report $($coverageFile.FullName) contains no instrumented lines."
+            }
+
+            $linesCovered += [int]$coverage.coverage.'lines-covered'
+            $linesValid += $reportLinesValid
+          }
+
+          $linePercent = [math]::Round(($linesCovered / $linesValid) * 100, 2)
+          $minimumLinePercent = 50
+          "### Test coverage" >> $env:GITHUB_STEP_SUMMARY
+          "- Reports: $($coverageFiles.Count)" >> $env:GITHUB_STEP_SUMMARY
+          "- Lines covered: $linesCovered / $linesValid" >> $env:GITHUB_STEP_SUMMARY
+          "- Line coverage: $linePercent%" >> $env:GITHUB_STEP_SUMMARY
+          "- Required minimum: $minimumLinePercent%" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($linePercent -lt $minimumLinePercent) {
+            throw "Line coverage $linePercent% is below the required $minimumLinePercent%."
+          }
+
+      - name: Upload test results and coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-and-coverage-${{ github.sha }}
+          path: .\artifacts\test-results
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Restore Windows x64 runtime assets
         run: dotnet restore .\EatsVoiceCompanion.App\EatsVoiceCompanion.App.csproj --runtime win-x64

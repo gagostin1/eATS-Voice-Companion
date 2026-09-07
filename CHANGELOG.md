@@ -6,6 +6,10 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+### Added
+
+- Cobertura code-coverage collection, validation, summaries, and downloadable CI artifacts
+
 ### Planned
 
 - Combined spoken instructions
