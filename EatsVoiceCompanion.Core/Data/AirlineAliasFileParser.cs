@@ -8,7 +8,8 @@ public static class AirlineAliasFileParser
     private static readonly Regex EntryPattern =
         new(
             @"^(?<designator>[A-Z0-9]{2,3})\s+" +
-            @"(?<telephony>[A-Z0-9]+(?:_[A-Z0-9]+)*)$",
+            @"(?<telephony>[A-Z0-9]+(?:_[A-Z0-9]+)*)" +
+            @"(?:\s+\d{1,4}\s+\d{1,4})?$",
             RegexOptions.Compiled |
             RegexOptions.IgnoreCase);
 

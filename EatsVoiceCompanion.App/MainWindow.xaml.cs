@@ -47,7 +47,12 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _transcriptionCancellation;
     private IReadOnlySet<string> _activeCallsigns =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, string> _activeStars =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private bool _hasFreshSnapshot;
+    private bool _currentPreviewRequiresStar;
+    private string? _currentPreviewSpokenStar;
+    private bool _currentPreviewWasRecovered;
     private CommandSafetyState _currentSafetyState =
         CommandSafetyState.NotReady;
     private bool _currentPreviewWasStaged;
@@ -213,6 +218,12 @@ public partial class MainWindow : Window
         string snapshotPath = Path.Combine(
             _settings.EatsDataDirectory,
             "SnapshotAuto.txt");
+        string logDetailPath = Path.Combine(
+            _settings.EatsDataDirectory,
+            "LogDetail.txt");
+        string airwaysPath = Path.Combine(
+            _settings.EatsDataDirectory,
+            "Airways.txt");
 
         _airlineAliasService = new EatsAirlineAliasService(airlinePath);
         _snapshotService = new EatsSnapshotService(snapshotPath);
@@ -246,12 +257,16 @@ public partial class MainWindow : Window
         }
 
         _voiceCommandParser = new VoiceCommandParser(_airlineAliases);
+        EatsRouteContextService routeContextService = new(
+            logDetailPath,
+            airwaysPath);
         _recognitionContextService = new RecognitionContextService(
             _detector,
             _snapshotService,
             _airlineAliases,
             TimeSpan.FromMinutes(_settings.SnapshotFreshnessMinutes),
-            logger: _logger);
+            logger: _logger,
+            routeContextService: routeContextService);
         _speechWorkflowService = new SpeechWorkflowService(
             _speechRecognitionService,
             _recognitionContextService);
@@ -320,6 +335,8 @@ public partial class MainWindow : Window
                     CommandValueTextBox.Text);
 
             PreviewText.Text = transmission;
+            _currentPreviewWasRecovered = false;
+            ConfigureRouteRequirement(transmission, spokenStar: null);
             PrepareNewPreviewForStaging();
             string callsign = transmission.Split(' ')[0];
             UpdateCommandSafetyStatus(callsign);
@@ -402,15 +419,22 @@ public partial class MainWindow : Window
             {
                 CommandStageStatusText.Foreground = Brushes.Firebrick;
                 CommandStageStatusText.Text =
-                    "The command was not staged because its callsign " +
-                    "is not freshly verified.";
+                    "The command was not staged because its safety " +
+                    "requirements are not freshly verified.";
                 return;
             }
+
+            string recoveryWarning = _currentPreviewWasRecovered
+                ? "\n\nWARNING: Speech recognition required a " +
+                  "best-effort interpretation. Compare the original " +
+                  "transcript and every preview field before approving."
+                : string.Empty;
 
             MessageBoxResult confirmation = MessageBox.Show(
                 this,
                 "Stage this verified command in eATS?\n\n" +
                 transmission +
+                recoveryWarning +
                 "\n\nThe application will not press the final Enter key.",
                 "Stage verified command",
                 MessageBoxButton.YesNo,
@@ -835,19 +859,83 @@ public partial class MainWindow : Window
 
         try
         {
-            ParsedVoiceCommand parsed = _voiceCommandParser.Parse(
-                transcript,
-                ControllerPositionTextBox.Text);
+            VoiceTranscriptRecoveryResult? recovery = null;
+            ParsedVoiceCommand parsed;
+
+            try
+            {
+                parsed = _voiceCommandParser.Parse(
+                    transcript,
+                    ControllerPositionTextBox.Text);
+            }
+            catch (Exception exception)
+                when (exception is ArgumentException or
+                    InvalidOperationException)
+            {
+                recovery = VoiceTranscriptRecovery.TryRecover(
+                    transcript,
+                    _activeCallsigns,
+                    _airlineAliases,
+                    _activeStars);
+
+                if (recovery is null)
+                {
+                    throw;
+                }
+
+                parsed = _voiceCommandParser.Parse(
+                    recovery.RecoveredTranscript);
+            }
+
+            if (recovery is null && HasFuzzyNamedStarMismatch(parsed))
+            {
+                VoiceTranscriptRecoveryResult? starRecovery =
+                    VoiceTranscriptRecovery.TryRecover(
+                        transcript,
+                        _activeCallsigns,
+                        _airlineAliases,
+                        _activeStars);
+
+                if (starRecovery?.StarWasCorrected == true)
+                {
+                    parsed = _voiceCommandParser.Parse(
+                        starRecovery.RecoveredTranscript);
+                    recovery = starRecovery;
+                }
+            }
 
             string transmission = EatsTransmissionValidator.Validate(
                 parsed.ToEatsCommand());
 
             ApplyParsedCommandToEditor(parsed);
             PreviewText.Text = transmission;
+            _currentPreviewWasRecovered = recovery is not null;
+            ConfigureRouteRequirement(
+                transmission,
+                GetSpokenStar(parsed));
             PrepareNewPreviewForStaging();
             UpdateCommandSafetyStatus(parsed.Callsign);
-            SpeechStatusText.Text =
-                "Transcription completed and command preview generated.";
+            if (recovery is null)
+            {
+                SpeechStatusText.Text =
+                    "Transcription completed and command preview generated.";
+            }
+            else
+            {
+                SpeechStatusText.Text =
+                    "Best-effort interpretation generated. Review every " +
+                    "field carefully before staging:\n" +
+                    recovery.RecoveredTranscript;
+
+                _logger.Warning(
+                    "VoiceTranscriptRecovered",
+                    "A constrained best-effort voice interpretation was used.",
+                    new
+                    {
+                        recovery.InstructionPhrase,
+                        recovery.StarWasCorrected
+                    });
+            }
         }
         catch (Exception exception)
         {
@@ -947,6 +1035,7 @@ public partial class MainWindow : Window
         RecognitionContextResult context)
     {
         _activeCallsigns = context.ActiveCallsigns;
+        _activeStars = context.ActiveStars;
         _hasFreshSnapshot = context.HasFreshSnapshot;
         SnapshotStatusText.Text = context.StatusMessage;
     }
@@ -957,6 +1046,9 @@ public partial class MainWindow : Window
     {
         PreviewText.Text = "Command not generated.";
         PreviewErrorText.Text = error;
+        _currentPreviewWasRecovered = false;
+        _currentPreviewRequiresStar = false;
+        _currentPreviewSpokenStar = null;
         _currentPreviewWasStaged = false;
         CommandStageStatusText.Foreground = Brushes.DimGray;
         CommandStageStatusText.Text =
@@ -981,7 +1073,70 @@ public partial class MainWindow : Window
             _hasFreshSnapshot,
             _activeCallsigns);
 
+        if (result.State == CommandSafetyState.Verified &&
+            _currentPreviewRequiresStar)
+        {
+            result = NamedStarSafetyEvaluator.Evaluate(
+                callsign,
+                _currentPreviewSpokenStar,
+                _activeStars);
+        }
+
         ApplySafetyStatus(result);
+    }
+
+    private void ConfigureRouteRequirement(
+        string transmission,
+        string? spokenStar)
+    {
+        string[] tokens = transmission.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+
+        _currentPreviewRequiresStar = tokens
+            .Skip(1)
+            .Any(token =>
+                token == "DV" ||
+                token.StartsWith("DVXM", StringComparison.Ordinal));
+        _currentPreviewSpokenStar = _currentPreviewRequiresStar
+            ? spokenStar
+            : null;
+    }
+
+    private static string? GetSpokenStar(ParsedVoiceCommand parsed)
+    {
+        string[] stars = parsed.Instructions
+            .Where(instruction =>
+                instruction.InstructionType is
+                    VoiceInstructionType.DescendVia or
+                    VoiceInstructionType.DescendViaExceptMaintain)
+            .Select(instruction => instruction.TextValue)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return stars.Length switch
+        {
+            0 => null,
+            1 => stars[0],
+            _ => throw new InvalidOperationException(
+                "A command cannot reference more than one STAR.")
+        };
+    }
+
+    private bool HasFuzzyNamedStarMismatch(ParsedVoiceCommand parsed)
+    {
+        string? spokenStar = GetSpokenStar(parsed);
+
+        return spokenStar is not null &&
+               _activeStars.TryGetValue(
+                   parsed.Callsign,
+                   out string? assignedStar) &&
+               !string.Equals(
+                   spokenStar,
+                   assignedStar,
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private void RefreshExistingPreviewSafety()

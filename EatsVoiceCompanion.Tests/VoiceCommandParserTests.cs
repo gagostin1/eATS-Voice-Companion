@@ -13,7 +13,9 @@ public sealed class VoiceCommandParserTests
                 ["Delta"] = "DAL",
                 ["United"] = "UAL",
                 ["American"] = "AAL",
-                ["Air Canada"] = "ACA"
+                ["Air Canada"] = "ACA",
+                ["Blue Streak"] = "JIA",
+                ["Piedmont"] = "PDT"
             };
 
     private readonly VoiceCommandParser _parser =
@@ -50,6 +52,12 @@ public sealed class VoiceCommandParserTests
     [InlineData(
         "American four five descend and maintain one zero thousand five hundred",
         "AAL45 DM105")]
+    [InlineData(
+        "Piedmont 5915 climb and maintain flight level two three zero",
+        "PDT5915 CM230")]
+    [InlineData(
+        "Blue Streak 5596 descend via",
+        "JIA5596 DV")]
     public void Parse_BuildsExpectedEatsCommand(
         string transcript,
         string expected)
@@ -102,6 +110,12 @@ public sealed class VoiceCommandParserTests
     [InlineData(
         "American 1307 descend via except maintain one two thousand",
         "AAL1307 DVXM120")]
+    [InlineData(
+        "American 1307 descend via the BANKR Five arrival",
+        "AAL1307 DV")]
+    [InlineData(
+        "American 1307 descend via BANKR five arrival except maintain one two thousand",
+        "AAL1307 DVXM120")]
     public void Parse_AcceptsDocumentedEatsCommandFamilies(
         string transcript,
         string expected)
@@ -143,8 +157,6 @@ public sealed class VoiceCommandParserTests
         "one two thousand at two five niner knots")]
     [InlineData(
         "American 1307 cross OZZZI at or above one two thousand")]
-    [InlineData(
-        "American 1307 descend via the EAGUL Six arrival")]
     public void Parse_RejectsUnsafeOrUnverifiableClearances(
         string transcript)
     {
@@ -159,6 +171,15 @@ public sealed class VoiceCommandParserTests
             });
 
         Assert.NotNull(exception);
+    }
+
+    [Fact]
+    public void Parse_PreservesNamedStarForSafetyVerification()
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(
+            "American 1307 descend via the BANKR Five arrival");
+
+        Assert.Equal("BANKR5", parsed.Instructions[0].TextValue);
     }
 
     [Fact]

@@ -21,8 +21,8 @@ contains only the compatibility facts needed by the original companion code.
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
 | The Atlanta altimeter 29.92 | `A2992` | `2992` |
-| Descend via | `DV` | none |
-| Descend via except maintain 12,000 | `DVXM120` | `12000` |
+| Descend via / descend via the BANKR Five arrival | `DV` | none |
+| Descend via the BANKR Five arrival except maintain 12,000 | `DVXM120` | `12000` |
 | Cross OZZZI at 12,000 | `XOZZZI@120` | `OZZZI 12000` |
 | Cross OZZZI at and maintain 12,000 at 250 knots | `XOZZZI@120@250K` | `OZZZI 12000 250` |
 
@@ -46,15 +46,23 @@ allowlisted token sequence can be corrected and rebuilt.
   eATS cancels speed assignments that appear before descend via.
 - `CROSS ... AT OR ABOVE` and `CROSS ... AT OR BELOW` are not generated because
   the supplied eATS radio reference does not define equivalent tokens.
-- Named STAR phraseology is rejected until the companion can verify the spoken
-  procedure against the aircraft's current route. The eATS `DV` token always
-  acts on the arrival already present in that route.
+- Every `DV` or `DVXM` preview requires a fresh, unambiguous assigned STAR from
+  the aircraft's generated route in `LogDetail.txt`. The procedure must be
+  marked descend-via capable in `Airways.txt` for that destination.
+- A spoken base STAR name and number, such as `BANKR Five arrival`, is retained
+  for safety validation even though eATS receives only `DV` or `DVXM`. A mismatch
+  with the assigned STAR blocks staging. Missing or stale route context leaves
+  the preview amber. Runway transitions are not yet parsed.
+- When strict speech parsing fails, constrained recovery may substitute a unique
+  active callsign, a similar supported instruction phrase, or a similar assigned
+  STAR. The recovered wording is shown to the controller. Ambiguous callsigns
+  and unsupported instructions are not guessed.
 
 ## Next command groups
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Route-aware named STAR verification and published-speed instructions.
+1. Published-speed instructions.
 2. Pilot's-discretion descent, expedite, and altitude reporting.
 3. Speed and Mach variants, including resume-normal-speed.
 4. Approach and vector-to-final instructions.

@@ -43,6 +43,29 @@ public sealed class EatsDataServiceTests : IDisposable
             timestamp.AddSeconds(1));
     }
 
+    [Fact]
+    public void RouteContextService_ResolvesActiveDescendViaStar()
+    {
+        Directory.CreateDirectory(_directory);
+        string logPath = Path.Combine(_directory, "LogDetail.txt");
+        string airwaysPath = Path.Combine(_directory, "Airways.txt");
+        File.WriteAllLines(
+            logPath,
+            [
+                "Generated IFR 406 JIA5588 KCAE CLT " +
+                "KCAE..AGUVE..CRDET.BANKR5.CLT"
+            ]);
+        File.WriteAllLines(
+            airwaysPath,
+            ["BANKR5 FIX1 FIX2 *DV120 MORE KCLT"]);
+
+        EatsRouteContextData result = new EatsRouteContextService(
+            logPath,
+            airwaysPath).Load(["JIA5588"]);
+
+        Assert.Equal("BANKR5", result.ActiveStars["JIA5588"]);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

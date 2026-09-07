@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace EatsVoiceCompanion.Core.Speech;
 
-public sealed class VoiceCommandParser
+public sealed partial class VoiceCommandParser
 {
     private static readonly CommandPattern[] ValuePatterns =
     {
@@ -155,6 +155,14 @@ public sealed class VoiceCommandParser
                 continue;
             }
 
+            if (StartsWithPhrase(remaining, "descend via"))
+            {
+                var result = ParseDescendVia(remaining);
+                instructions.Add(result.Instruction);
+                remaining = result.Remaining;
+                continue;
+            }
+
             CommandPattern? pattern = ValuePatterns.FirstOrDefault(
                 candidate => StartsWithPhrase(
                     remaining,
@@ -173,25 +181,6 @@ public sealed class VoiceCommandParser
                 continue;
             }
 
-            if (StartsWithPhrase(remaining, "descend via"))
-            {
-                instructions.Add(
-                    new ParsedVoiceInstruction(
-                        VoiceInstructionType.DescendVia));
-
-                remaining = remaining["descend via".Length..].Trim();
-
-                if (remaining.Length > 0 &&
-                    !StartsWithInstructionOrConnector(remaining))
-                {
-                    throw new InvalidOperationException(
-                        "Named descend-via procedures cannot yet be " +
-                        "verified against the aircraft route.");
-                }
-
-                continue;
-            }
-
             throw new InvalidOperationException(
                 $"The remaining instruction was not recognized: " +
                 $"'{remaining}'.");
@@ -204,6 +193,78 @@ public sealed class VoiceCommandParser
         }
 
         return instructions;
+    }
+
+    private static (
+        ParsedVoiceInstruction Instruction,
+        string Remaining) ParseDescendVia(string value)
+    {
+        string remaining = value["descend via".Length..].Trim();
+
+        if (remaining.Length == 0 ||
+            (StartsWithInstructionOrConnector(remaining) &&
+             !remaining.StartsWith("the ", StringComparison.Ordinal)))
+        {
+            return (
+                new ParsedVoiceInstruction(
+                    VoiceInstructionType.DescendVia),
+                remaining);
+        }
+
+        const string exceptMaintain = "except maintain ";
+
+        if (remaining.StartsWith(exceptMaintain, StringComparison.Ordinal))
+        {
+            var altitude = TakeValue(remaining[exceptMaintain.Length..]);
+
+            return (
+                new ParsedVoiceInstruction(
+                    VoiceInstructionType.DescendViaExceptMaintain,
+                    NumericValue:
+                        AviationAltitudeParser.Parse(altitude.Value)),
+                altitude.Remaining);
+        }
+
+        Match match = NamedStarPattern().Match(remaining);
+
+        if (!match.Success)
+        {
+            throw new ArgumentException(
+                "A named descend-via clearance must say the STAR name, " +
+                "number, and 'arrival'.",
+                nameof(value));
+        }
+
+        string star = StarNameNormalizer.Normalize(
+            match.Groups["star"].Value);
+        string afterArrival = match.Groups["remaining"].Value.Trim();
+
+        if (afterArrival.StartsWith(exceptMaintain, StringComparison.Ordinal))
+        {
+            var altitude = TakeValue(
+                afterArrival[exceptMaintain.Length..].Trim());
+
+            return (
+                new ParsedVoiceInstruction(
+                    VoiceInstructionType.DescendViaExceptMaintain,
+                    NumericValue:
+                        AviationAltitudeParser.Parse(altitude.Value),
+                    TextValue: star),
+                altitude.Remaining);
+        }
+
+        if (afterArrival.Length > 0 &&
+            !StartsWithInstructionOrConnector(afterArrival))
+        {
+            throw new InvalidOperationException(
+                "The words after the named STAR were not recognized.");
+        }
+
+        return (
+            new ParsedVoiceInstruction(
+                VoiceInstructionType.DescendVia,
+                TextValue: star),
+            afterArrival);
     }
 
     private static ParsedVoiceInstruction ParseValueInstruction(
@@ -534,4 +595,10 @@ public sealed class VoiceCommandParser
         bool IsFlightLevel = false,
         bool IsAltitude = false,
         bool IsFix = false);
+
+    [GeneratedRegex(
+        "^(?:the )?(?<star>[a-z0-9]+(?: [a-z0-9]+)?) " +
+        "arrival(?: (?<remaining>.*))?$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex NamedStarPattern();
 }

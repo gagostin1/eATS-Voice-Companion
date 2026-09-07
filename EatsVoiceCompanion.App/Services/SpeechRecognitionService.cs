@@ -16,10 +16,10 @@ public interface ISpeechRecognitionService
 
 public sealed class SpeechRecognitionService : ISpeechRecognitionService
 {
-    private const string ModelFileName = "ggml-base.en.bin";
-    private const long ExpectedModelFileSizeBytes = 147_964_211;
+    private const string ModelFileName = "ggml-small.en.bin";
+    private const long ExpectedModelFileSizeBytes = 487_614_201;
     private const string ExpectedModelSha256 =
-        "A03779C86DF3323075F5E796CB2CE5029F00EC8869EEE3FDFB897AFE36C6D002";
+        "C6138D6D58ECC8322097E0F987C32F1BE8BB0A18532A3F88F734D1BBF9C41E5D";
     private const string RecognitionPrompt =
     "Air traffic control phraseology. " +
     "Delta one two three, turn left heading two seven zero. " +
@@ -29,10 +29,13 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "United seven fourteen. " +
     "American five twenty-one. " +
     "Asiana twenty-five. " +
+    "Blue Streak fifty-five ninety-six. " +
+    "Endeavor forty-eight twenty-six. " +
     "Descend and maintain. Maintain speed. Proceed direct. " +
     "Cross OZZZI at and maintain one two thousand at two five zero knots. " +
     "The Atlanta altimeter two niner niner two. " +
-    "Descend via. Descend via except maintain one two thousand.";
+    "Descend via. Descend via the BANKR Five arrival. " +
+    "Descend via except maintain one two thousand.";
 
     private readonly AppLogger? _logger;
     private bool _modelValidated;
@@ -114,7 +117,7 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
 
             using Stream modelStream =
                 await WhisperGgmlDownloader.Default
-                    .GetGgmlModelAsync(GgmlType.BaseEn);
+                    .GetGgmlModelAsync(GgmlType.SmallEn);
 
             // This scope ensures the file is closed before File.Move runs.
             await using (FileStream fileStream = new(
@@ -204,6 +207,8 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
                 .WithLanguage("en")
                 .WithPrompt(completePrompt)
                 .WithSingleSegment()
+                .WithBeamSearchSamplingStrategy(
+                    strategy => strategy.WithBeamSize(5))
                 .Build();
 
         await using FileStream audioStream =

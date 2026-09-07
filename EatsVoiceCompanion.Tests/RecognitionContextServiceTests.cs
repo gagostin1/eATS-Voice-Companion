@@ -44,6 +44,21 @@ public sealed class RecognitionContextServiceTests
     }
 
     [Fact]
+    public void Build_RetainsStaleAircraftOnlyForSpeechRecovery()
+    {
+        RecognitionContextService service = CreateService(
+            Process(),
+            Snapshot(Now.AddMinutes(-4), "AAL123"));
+
+        RecognitionContextResult result = service.Build("Atlanta Center");
+
+        Assert.False(result.HasFreshSnapshot);
+        Assert.Contains("AAL123", result.ActiveCallsigns);
+        Assert.Contains("American 123", result.Prompt);
+        Assert.Contains("staging remains disabled", result.StatusMessage);
+    }
+
+    [Fact]
     public void Build_ReturnsFreshAircraftAndPrompt()
     {
         RecognitionContextService service = CreateService(
@@ -58,16 +73,60 @@ public sealed class RecognitionContextServiceTests
         Assert.Contains("30-second-old", result.StatusMessage);
     }
 
+    [Fact]
+    public void Build_AddsFreshNamedStarContextToPrompt()
+    {
+        RecognitionContextService service = CreateService(
+            Process(),
+            Snapshot(Now.AddSeconds(-30), "AAL123"),
+            new FakeRouteContextService(
+                new EatsRouteContextData(
+                    new Dictionary<string, string>
+                    {
+                        ["AAL123"] = "BANKR5"
+                    },
+                    Now.AddSeconds(-20))));
+
+        RecognitionContextResult result = service.Build("Atlanta Center");
+
+        Assert.Equal("BANKR5", result.ActiveStars["AAL123"]);
+        Assert.Contains("BANKR five", result.Prompt);
+        Assert.Contains("1 descend-via aircraft", result.StatusMessage);
+    }
+
+    [Fact]
+    public void Build_DropsStaleNamedStarContextButKeepsFreshSnapshot()
+    {
+        RecognitionContextService service = CreateService(
+            Process(),
+            Snapshot(Now.AddSeconds(-30), "AAL123"),
+            new FakeRouteContextService(
+                new EatsRouteContextData(
+                    new Dictionary<string, string>
+                    {
+                        ["AAL123"] = "BANKR5"
+                    },
+                    Now.AddMinutes(-4))));
+
+        RecognitionContextResult result = service.Build("Atlanta Center");
+
+        Assert.True(result.HasFreshSnapshot);
+        Assert.Empty(result.ActiveStars);
+        Assert.Contains("STAR context is stale", result.StatusMessage);
+    }
+
     private static RecognitionContextService CreateService(
         EatsProcessInfo? process,
-        EatsSnapshotData snapshot)
+        EatsSnapshotData snapshot,
+        IEatsRouteContextService? routeContextService = null)
     {
         return new RecognitionContextService(
             new FakeProcessDetector(process),
             new FakeSnapshotService(snapshot),
             Aliases,
             TimeSpan.FromMinutes(3),
-            () => Now);
+            () => Now,
+            routeContextService: routeContextService);
     }
 
     private static EatsProcessInfo Process()
@@ -97,5 +156,14 @@ public sealed class RecognitionContextServiceTests
         : IEatsSnapshotService
     {
         public EatsSnapshotData Load() => result;
+    }
+
+    private sealed class FakeRouteContextService(EatsRouteContextData result)
+        : IEatsRouteContextService
+    {
+        public EatsRouteContextData Load(IEnumerable<string> activeCallsigns)
+        {
+            return result;
+        }
     }
 }

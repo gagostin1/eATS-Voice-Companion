@@ -55,6 +55,22 @@ public sealed class AirlineAliasFileParserTests
     }
 
     [Fact]
+    public void Parse_AcceptsTrailingFlightNumberRanges()
+    {
+        string[] lines =
+        {
+            "JIA BLUE_STREAK 5001 5699",
+            "PDT PIEDMONT 5901 6199"
+        };
+
+        IReadOnlyDictionary<string, string> result =
+            AirlineAliasFileParser.Parse(lines);
+
+        Assert.Equal("JIA", result["BLUE STREAK"]);
+        Assert.Equal("PDT", result["PIEDMONT"]);
+    }
+
+    [Fact]
     public void Parse_IgnoresMalformedEntries()
     {
         string[] lines =

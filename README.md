@@ -9,19 +9,21 @@ eATS Voice Companion is an independent Windows application that adds local voice
 The current workflow records a controller transmission, transcribes it locally with Whisper, interprets supported ATC phraseology, formats the matching eATS command, and verifies the callsign against a recent eATS snapshot. A controller may explicitly stage a freshly verified command in eATS for review; the application never presses the final Enter key or transmits the command automatically.
 
 > [!IMPORTANT]
-> This project is an early pre-release. Always verify the transcript, callsign, instruction, and value shown in the preview. A green callsign check confirms only that the exact callsign appears in a recent snapshot; it does not prove that the recognized instruction is operationally correct.
+> This project is an early pre-release. Always verify the transcript, callsign, instruction, and value shown in the preview. A green check confirms the available eATS context required for that command; it does not prove that the recognized instruction is operationally correct.
 
 ## Current features
 
 - Discovers Windows recording devices and records hold-to-talk audio as 16 kHz, 16-bit, mono WAV files
-- Downloads the Whisper `base.en` model on first use and performs speech recognition locally
+- Downloads the higher-accuracy Whisper `small.en` model on first use and performs local speech recognition with beam-search decoding
 - Loads airline telephony names and designators from the user's installed eATS `Airlines.txt`
-- Reads active aircraft from eATS `SnapshotAuto.txt` without modifying either file
+- Reads active aircraft from eATS `SnapshotAuto.txt` without modifying it
+- Resolves descend-via-capable assigned STARs from eATS `LogDetail.txt` and `Airways.txt`
 - Adds active airline callsigns to the speech-recognition prompt to improve callsign recognition
+- Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, and assigned STAR context
 - Supports an optional controller position in transmissions, such as `American 1307, Atlanta Center, ...`
 - Converts single or combined recognized instructions into editable eATS command previews
 - Detects a running eATS process and displays basic process information
-- Classifies previews as verified, preview-only, or blocked using exact callsign matching against a fresh snapshot
+- Classifies previews as verified, preview-only, or blocked using fresh callsign and, for descend-via commands, assigned-STAR context
 - Rejects previews that fall outside a strict allowlist of supported eATS command tokens and characters
 - Stages a freshly revalidated command in the eATS radio-command field only after explicit confirmation, without pressing the final Enter key
 - Provides visible cancellation while the model is downloading or a recording is being transcribed
@@ -40,8 +42,8 @@ Supported instructions:
 | Turn right heading | `DAL123 TRH270` |
 | Climb and maintain | `DAL123 CM230` |
 | Descend and maintain | `DAL123 DM100` |
-| Descend via | `DAL123 DV` |
-| Descend via except maintain | `DAL123 DVXM120` |
+| Descend via, optionally naming the assigned STAR | `DAL123 DV` |
+| Descend via the assigned STAR except maintain | `DAL123 DVXM120` |
 | Maintain speed | `DAL123 S250` |
 | Proceed direct | `DAL123 ..LOZIT` |
 | Cross a fix at an altitude | `DAL123 XOZZZI@120` |
@@ -55,6 +57,7 @@ Examples of accepted phraseology include:
 Delta one two three, turn left heading two seven zero.
 United seven fourteen, climb and maintain flight level two three zero.
 American four five, descend and maintain one zero thousand five hundred.
+Brickyard fifty-five eighty-eight, descend via the BANKR Five arrival.
 American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
 American thirteen oh seven, Atlanta Center, welcome.
 ```
@@ -66,13 +69,15 @@ combined-command behavior, safety restrictions, and the planned command groups.
 
 The preview displays one of three callsign states:
 
-- **Verified (green):** eATS is running, its automatic snapshot is within the configured freshness threshold, and the exact callsign is active.
-- **Preview only (amber):** a current snapshot is unavailable, so the callsign cannot be verified.
-- **Blocked (red):** a current snapshot exists but does not contain the exact callsign, or the recording/transcript did not produce a valid command.
+- **Verified (green):** eATS is running, its automatic snapshot is fresh, and the exact callsign is active. A descend-via command additionally requires a fresh route whose assigned STAR supports descend via; a spoken STAR name must match it.
+- **Preview only (amber):** required current snapshot or route context is unavailable, so the command cannot be fully verified.
+- **Blocked (red):** current context disproves the callsign or spoken STAR, or the recording/transcript did not produce a valid command.
 
-Snapshot context is loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` about once per minute while the simulation is active.
+Snapshot and route context are loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` and `LogDetail.txt` while the simulation is active. `Airways.txt` is treated as the installed static procedure database.
 
 Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them.
+
+If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
 
 The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
@@ -125,11 +130,15 @@ Start the application:
 dotnet run --project .\EatsVoiceCompanion.App\EatsVoiceCompanion.App.csproj
 ```
 
-On first transcription, the application downloads `ggml-base.en.bin` to:
+On first transcription, the application downloads the approximately 488 MB `ggml-small.en.bin` model to:
 
 ```text
 %LOCALAPPDATA%\EatsVoiceCompanion\Models
 ```
+
+Existing development installations may retain the older `ggml-base.en.bin` in
+that directory. After confirming `small.en` works, it may be deleted while the
+application is closed to reclaim space.
 
 Settings and structured diagnostic logs are stored in:
 
@@ -144,7 +153,7 @@ Test recordings are stored in:
 %TEMP%\EatsVoiceCompanion
 ```
 
-Airline and snapshot data are read from this default eATS data directory:
+Airline, snapshot, generated-route, and procedure data are read from this default eATS data directory:
 
 ```text
 %LOCALAPPDATA%\ATSim2020\eATS
@@ -161,7 +170,7 @@ The data directory can be changed in the application and is saved locally. The a
 5. Hold **Hold to record**, speak one or more supported instructions, and release the button.
 6. Choose **Cancel transcription** if recognition needs to be stopped.
 7. Review the transcript and generated command.
-8. Confirm that the callsign safety message matches the expected active aircraft.
+8. Confirm that the safety message matches the expected active aircraft and, for descend via, its assigned STAR.
 9. Edit the preview fields and choose **Build preview** if a correction is needed.
 10. Choose **Stage in eATS**, review the confirmation, and approve it only if the command is correct.
 11. Inspect the staged text in the lower-left eATS radio-command field and press **Enter** yourself only when it is safe to transmit.
@@ -169,9 +178,11 @@ The data directory can be changed in the application and is saved locally. The a
 ## Known limitations
 
 - The application supports airline callsigns but does not yet parse spoken general-aviation registration callsigns such as N-numbers.
-- Named STARs in descend-via phraseology are not yet accepted because the application cannot verify a spoken procedure name against the aircraft's current route.
+- Named STAR runway transitions are not yet parsed; say only the base procedure name and number, such as `BANKR Five arrival`.
+- Descend-via staging requires an unambiguous assigned STAR found in fresh eATS generated-route data and marked with descend-via support in the installed procedure database.
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
-- Recognition uses the English `base.en` Whisper model and does not expose confidence scoring.
+- Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
+- Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
 - Tests cover core behavior and file/service integration, but actual microphone hardware and WPF interaction still require manual testing.
 - Stage-only entry depends on Windows foreground input; it aborts if eATS loses focus, and both applications should run at the same Windows privilege level.
 - There is no installer, signed release, or automatic command transmission.
@@ -186,14 +197,14 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with route-aware STAR and published-speed instructions
+- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with published-speed instructions
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases
 
 ## Privacy
 
-Recordings and transcription stay local. The application downloads the speech model on first use, but it does not upload recorded audio or transcripts. Saved WAV recordings are deleted on a best-effort basis when they exceed the configured age or count limits.
+Recordings and transcription stay local. The application downloads the speech model on first use, but it does not upload recorded audio or transcripts. It reads eATS airline, snapshot, route-log, and procedure files in place and does not copy or modify them. Saved WAV recordings are deleted on a best-effort basis when they exceed the configured age or count limits.
 
 Diagnostic logs stay local and intentionally omit full transcripts, generated commands, and callsigns. They contain event names, status metadata, and exception types/messages for troubleshooting. Logs older than 14 days are removed on a best-effort basis.
 
