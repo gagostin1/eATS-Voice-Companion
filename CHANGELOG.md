@@ -20,6 +20,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Editable transcripts with an **Interpret again** workflow that does not require rerecording
 - Ambiguous active-callsign suggestions that remain fail-closed until the controller corrects the transcript
 - A generated, scenario-independent recognition matrix covering varied airlines, flight numbers, controller positions, STARs, command families, and recovery cases through the production interpreter
+- Published-speed compliance at a named fix using canonical `CWS@FIX` output, descend-via context enforcement, safe ordering, speech parsing, and manual preview support
 
 ### Fixed
 

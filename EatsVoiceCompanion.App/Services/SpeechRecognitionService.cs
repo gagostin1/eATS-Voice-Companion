@@ -35,7 +35,9 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "Cross OZZZI at and maintain one two thousand at two five zero knots. " +
     "The Atlanta altimeter two niner niner two. " +
     "Descend via. Descend via the BANKR Five arrival. " +
-    "Descend via except maintain one two thousand.";
+    "Descend via except maintain one two thousand. " +
+    "Comply with speed restrictions at HOMER. " +
+    "Resume published speed at HOMER.";
 
     private readonly AppLogger? _logger;
     private bool _modelValidated;

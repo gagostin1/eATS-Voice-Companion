@@ -52,6 +52,10 @@ public sealed class CommandPreviewBuilderTests
         VoiceInstructionType.Altimeter,
         "2992",
         "DAL123 A2992")]
+    [InlineData(
+        VoiceInstructionType.ComplyWithPublishedSpeeds,
+        "HOMER",
+        "DAL123 DV CWS@HOMER")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,
@@ -66,14 +70,14 @@ public sealed class CommandPreviewBuilderTests
     public void BuildCombined_ValidatesEveryToken()
     {
         Assert.Equal(
-            "DAL123 XOZZZI@120@250K A2992",
+            "DAL123 DV S250 CWS@HOMER",
             CommandPreviewBuilder.BuildCombined(
                 "DAL123",
-                "XOZZZI@120@250K A2992"));
+                "DV S250 CWS@HOMER"));
 
         Assert.Throws<ArgumentException>(
             () => CommandPreviewBuilder.BuildCombined(
                 "DAL123",
-                "XOZZZI@120 BAD"));
+                "DV CWS@HOMER BAD"));
     }
 }

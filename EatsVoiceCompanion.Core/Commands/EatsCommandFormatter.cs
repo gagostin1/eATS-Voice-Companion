@@ -91,6 +91,11 @@ public static class EatsCommandFormatter
         return $"S{speedKnots}";
     }
 
+    public static string ComplyWithPublishedSpeeds(string fix)
+    {
+        return $"CWS@{NormalizeFix(fix)}";
+    }
+
     public static string Altimeter(int setting)
     {
         if (setting is < 0 or > 9999)

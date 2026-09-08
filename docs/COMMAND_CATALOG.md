@@ -18,6 +18,7 @@ contains only the compatibility facts needed by the original companion code.
 | Climb and maintain FL230 | `CM230` | `23000` |
 | Descend and maintain 12,000 | `DM120` | `12000` |
 | Maintain 250 knots | `S250` | `250` |
+| Descend via, comply with speed restrictions at HOMER | `DV CWS@HOMER` | `HOMER` |
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
 | The Atlanta altimeter 29.92 | `A2992` | `2992` |
@@ -44,6 +45,14 @@ allowlisted token sequence can be corrected and rebuilt.
   increments, matching FAA controller phraseology.
 - `DV` or `DVXM` must precede an assigned speed in the same transmission because
   eATS cancels speed assignments that appear before descend via.
+- Published-speed compliance emits canonical `CWS@<fix>` output. The supplied
+  eATS reference also accepts `PS@<fix>`, but the companion does not emit that
+  alias. `CWS` is accepted only after `DV` or `DVXM` in the same preview. An
+  assigned speed must appear between descend via and `CWS`. A later direct or
+  descend-via token requires `CWS` to be reissued after it.
+- The simulator requires the named fix to have an applicable charted speed. The
+  companion validates the syntax and command order but does not currently parse
+  charted speed restrictions from procedure data.
 - `CROSS ... AT OR ABOVE` and `CROSS ... AT OR BELOW` are not generated because
   the supplied eATS radio reference does not define equivalent tokens.
 - Every `DV` or `DVXM` preview requires a fresh, unambiguous assigned STAR from
@@ -64,14 +73,13 @@ allowlisted token sequence can be corrected and rebuilt.
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Published-speed instructions.
-2. Pilot's-discretion descent, expedite, and altitude reporting.
-3. Speed and Mach variants, including resume-normal-speed.
-4. Approach and vector-to-final instructions.
-5. Frequency changes and communication responses.
-6. Holding instructions and options.
-7. Transponder commands.
-8. Initial-clearance and release commands.
+1. Pilot's-discretion descent, expedite, and altitude reporting.
+2. Speed and Mach variants, including resume-normal-speed.
+3. Approach and vector-to-final instructions.
+4. Frequency changes and communication responses.
+5. Holding instructions and options.
+6. Transponder commands.
+7. Initial-clearance and release commands.
 
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before

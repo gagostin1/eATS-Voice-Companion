@@ -62,6 +62,7 @@ public static partial class EatsTransmissionValidator
         if (instruction is "R" or "DV" ||
             DirectPattern().IsMatch(instruction) ||
             AltimeterPattern().IsMatch(instruction) ||
+            PublishedSpeedPattern().IsMatch(instruction) ||
             CrossAtPattern().IsMatch(instruction) &&
                 IsValidCrossAt(instruction))
         {
@@ -147,27 +148,74 @@ public static partial class EatsTransmissionValidator
 
     private static void ValidateInstructionOrder(string[] instructions)
     {
-        int descendViaIndex = Array.FindIndex(
+        int firstDescendViaIndex = Array.FindIndex(
             instructions,
             instruction => instruction == "DV" ||
                            instruction.StartsWith(
                                "DVXM",
                                StringComparison.Ordinal));
 
-        if (descendViaIndex <= 0)
+        if (firstDescendViaIndex > 0)
+        {
+            bool speedBeforeDescendVia = instructions
+                .Take(firstDescendViaIndex)
+                .Any(instruction => SpeedPattern().IsMatch(instruction));
+
+            if (speedBeforeDescendVia)
+            {
+                throw new ArgumentException(
+                    "A descend-via command must precede an assigned speed " +
+                    "because eATS cancels earlier speed assignments.",
+                    nameof(instructions));
+            }
+        }
+
+        int[] publishedSpeedIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => PublishedSpeedPattern().IsMatch(item.instruction))
+            .Select(item => item.index)
+            .ToArray();
+
+        if (publishedSpeedIndexes.Length == 0)
         {
             return;
         }
 
-        bool speedBeforeDescendVia = instructions
-            .Take(descendViaIndex)
-            .Any(instruction => SpeedPattern().IsMatch(instruction));
-
-        if (speedBeforeDescendVia)
+        if (publishedSpeedIndexes.Length > 1)
         {
             throw new ArgumentException(
-                "A descend-via command must precede an assigned speed " +
-                "because eATS cancels earlier speed assignments.",
+                "Only one published-speed fix can be staged at a time.",
+                nameof(instructions));
+        }
+
+        int publishedSpeedIndex = publishedSpeedIndexes[0];
+        int lastDescendViaIndex = Array.FindLastIndex(
+            instructions,
+            instruction => instruction == "DV" ||
+                           instruction.StartsWith(
+                               "DVXM",
+                               StringComparison.Ordinal));
+        int lastDirectIndex = Array.FindLastIndex(
+            instructions,
+            instruction => DirectPattern().IsMatch(instruction));
+
+        if (lastDescendViaIndex < 0 ||
+            publishedSpeedIndex < lastDescendViaIndex ||
+            publishedSpeedIndex < lastDirectIndex)
+        {
+            throw new ArgumentException(
+                "Published-speed compliance must follow the final " +
+                "descend-via and direct command in the same preview.",
+                nameof(instructions));
+        }
+
+        if (instructions
+            .Skip(publishedSpeedIndex + 1)
+            .Any(instruction => SpeedPattern().IsMatch(instruction)))
+        {
+            throw new ArgumentException(
+                "An assigned speed must precede published-speed " +
+                "compliance in the same preview.",
                 nameof(instructions));
         }
     }
@@ -215,6 +263,11 @@ public static partial class EatsTransmissionValidator
 
     [GeneratedRegex("^A[0-9]{4}$", RegexOptions.CultureInvariant)]
     private static partial Regex AltimeterPattern();
+
+    [GeneratedRegex(
+        "^CWS@[A-Z0-9]{2,8}$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex PublishedSpeedPattern();
 
     [GeneratedRegex(
         "^X(?<fix>[A-Z0-9]{2,8})@(?<altitude>[0-9]{2,3})(?:@(?<speed>[0-9]{3})K)?$",

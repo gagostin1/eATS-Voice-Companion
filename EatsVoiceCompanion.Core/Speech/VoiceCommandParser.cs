@@ -48,6 +48,26 @@ public sealed partial class VoiceCommandParser
             VoiceInstructionType.MaintainSpeed),
 
         new(
+            "comply with published speed restrictions at",
+            VoiceInstructionType.ComplyWithPublishedSpeeds,
+            IsFix: true),
+
+        new(
+            "comply with speed restrictions at",
+            VoiceInstructionType.ComplyWithPublishedSpeeds,
+            IsFix: true),
+
+        new(
+            "comply with published speeds at",
+            VoiceInstructionType.ComplyWithPublishedSpeeds,
+            IsFix: true),
+
+        new(
+            "resume published speed at",
+            VoiceInstructionType.ComplyWithPublishedSpeeds,
+            IsFix: true),
+
+        new(
             "proceed direct to",
             VoiceInstructionType.ProceedDirect,
             IsFix: true),

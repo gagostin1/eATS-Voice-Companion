@@ -42,6 +42,9 @@ public static class CommandPreviewBuilder
                 EatsCommandFormatter.MaintainSpeed(
                     ParseNumber(value, "speed")),
 
+            VoiceInstructionType.ComplyWithPublishedSpeeds =>
+                EatsCommandFormatter.ComplyWithPublishedSpeeds(value!),
+
             VoiceInstructionType.ProceedDirect =>
                 EatsCommandFormatter.ProceedDirect(value!),
 
@@ -63,10 +66,14 @@ public static class CommandPreviewBuilder
                 "The instruction type is not supported.")
         };
 
-        string transmission =
-            EatsCommandFormatter.BuildTransmission(
-                callsign,
-                instruction);
+        string[] instructions = instructionType ==
+            VoiceInstructionType.ComplyWithPublishedSpeeds
+                ? [EatsCommandFormatter.DescendVia(), instruction]
+                : [instruction];
+
+        string transmission = EatsCommandFormatter.BuildTransmission(
+            callsign,
+            instructions);
 
         return EatsTransmissionValidator.Validate(
             transmission);

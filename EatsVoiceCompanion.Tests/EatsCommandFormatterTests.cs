@@ -95,6 +95,9 @@ public sealed class EatsCommandFormatterTests
                 12000,
                 250));
         Assert.Equal("A2992", EatsCommandFormatter.Altimeter(2992));
+        Assert.Equal(
+            "CWS@HOMER",
+            EatsCommandFormatter.ComplyWithPublishedSpeeds("homer"));
     }
 
     [Fact]

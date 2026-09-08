@@ -282,6 +282,8 @@
                                       Tag="DescendViaExceptMaintain"/>
                         <ComboBoxItem Content="Maintain speed"
                                       Tag="Speed"/>
+                        <ComboBoxItem Content="Descend via; comply with published speeds at fix"
+                                      Tag="PublishedSpeed"/>
                         <ComboBoxItem Content="Proceed direct"
                                       Tag="Direct"/>
                         <ComboBoxItem Content="Cross fix at altitude"

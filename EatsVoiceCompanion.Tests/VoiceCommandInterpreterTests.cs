@@ -109,6 +109,17 @@ public sealed class VoiceCommandInterpreterTests
                     star
                 ];
 
+                yield return
+                [
+                    $"{spoken} {flightNumber}, {position}, descend via " +
+                    $"the {starPhrase} arrival then comply with speed " +
+                    "restrictions at HOMER",
+                    position,
+                    designator + flightNumber,
+                    $"{designator}{flightNumber} DV CWS@HOMER",
+                    star
+                ];
+
                 scenarioIndex++;
             }
         }

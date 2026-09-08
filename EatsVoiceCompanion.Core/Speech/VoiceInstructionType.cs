@@ -10,6 +10,7 @@ public enum VoiceInstructionType
     DescendVia,
     DescendViaExceptMaintain,
     MaintainSpeed,
+    ComplyWithPublishedSpeeds,
     ProceedDirect,
     CrossAtAltitude,
     CrossAtAltitudeAndSpeed,

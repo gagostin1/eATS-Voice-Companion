@@ -104,6 +104,10 @@ public sealed record ParsedVoiceCommand
                 EatsCommandFormatter.MaintainSpeed(
                     RequireNumericValue(instruction)),
 
+            VoiceInstructionType.ComplyWithPublishedSpeeds =>
+                EatsCommandFormatter.ComplyWithPublishedSpeeds(
+                    RequireTextValue(instruction)),
+
             VoiceInstructionType.ProceedDirect =>
                 EatsCommandFormatter.ProceedDirect(
                     RequireTextValue(instruction)),

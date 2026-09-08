@@ -137,6 +137,29 @@ public sealed class VoiceCommandParserTests
             parsed.ToEatsCommand());
     }
 
+    [Theory]
+    [InlineData(
+        "American 1307 descend via then comply with speed restrictions at HOMER",
+        "AAL1307 DV CWS@HOMER")]
+    [InlineData(
+        "American 1307 descend via and comply with published speeds at HOMER",
+        "AAL1307 DV CWS@HOMER")]
+    [InlineData(
+        "American 1307 descend via, maintain speed two five zero, " +
+        "then resume published speed at HOMER",
+        "AAL1307 DV S250 CWS@HOMER")]
+    public void Parse_AcceptsPublishedSpeedCompliance(
+        string transcript,
+        string expected)
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(transcript);
+
+        Assert.Equal(expected, parsed.ToEatsCommand());
+        Assert.Equal(
+            expected,
+            EatsTransmissionValidator.Validate(parsed.ToEatsCommand()));
+    }
+
     [Fact]
     public void Parse_AcceptsMultipleIndependentInstructions()
     {

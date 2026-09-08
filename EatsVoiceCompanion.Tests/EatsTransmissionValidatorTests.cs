@@ -11,6 +11,12 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("UAL714 R", "UAL714 R")]
     [InlineData("AAL123 A2992", "AAL123 A2992")]
     [InlineData("AAL123 DV S250", "AAL123 DV S250")]
+    [InlineData(
+        "AAL123 DV S250 CWS@HOMER",
+        "AAL123 DV S250 CWS@HOMER")]
+    [InlineData(
+        "AAL123 DV ..OZZZI CWS@HOMER",
+        "AAL123 DV ..OZZZI CWS@HOMER")]
     [InlineData("AAL123 DVXM120", "AAL123 DVXM120")]
     [InlineData("AAL123 XOZZZI@120", "AAL123 XOZZZI@120")]
     [InlineData(
@@ -41,6 +47,8 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 XOZZZI@120@259K")]
     [InlineData("AAL123 XOZZZI@120@250")]
     [InlineData("AAL123 X@120")]
+    [InlineData("AAL123 CWS@A")]
+    [InlineData("AAL123 PS@HOMER")]
     public void Validate_RejectsAnythingOutsideAllowlist(string input)
     {
         Assert.Throws<ArgumentException>(
@@ -53,5 +61,17 @@ public sealed class EatsTransmissionValidatorTests
         Assert.Throws<ArgumentException>(
             () => EatsTransmissionValidator.Validate(
                 "AAL123 S250 DV"));
+    }
+
+    [Theory]
+    [InlineData("AAL123 CWS@HOMER")]
+    [InlineData("AAL123 CWS@HOMER DV")]
+    [InlineData("AAL123 DV CWS@HOMER S250")]
+    [InlineData("AAL123 DV CWS@HOMER ..OZZZI")]
+    [InlineData("AAL123 DV CWS@HOMER CWS@EAGUL")]
+    public void Validate_RejectsUnsafePublishedSpeedOrdering(string input)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsTransmissionValidator.Validate(input));
     }
 }

@@ -386,6 +386,8 @@ public partial class MainWindow : Window
             "DescendViaExceptMaintain" =>
                 VoiceInstructionType.DescendViaExceptMaintain,
             "Speed" => VoiceInstructionType.MaintainSpeed,
+            "PublishedSpeed" =>
+                VoiceInstructionType.ComplyWithPublishedSpeeds,
             "Direct" => VoiceInstructionType.ProceedDirect,
             "CrossAltitude" => VoiceInstructionType.CrossAtAltitude,
             "CrossAltitudeSpeed" =>
@@ -953,6 +955,7 @@ public partial class MainWindow : Window
             VoiceInstructionType.DescendViaExceptMaintain =>
                 "DescendViaExceptMaintain",
             VoiceInstructionType.MaintainSpeed => "Speed",
+            VoiceInstructionType.ComplyWithPublishedSpeeds => "PublishedSpeed",
             VoiceInstructionType.ProceedDirect => "Direct",
             VoiceInstructionType.CrossAtAltitude => "CrossAltitude",
             VoiceInstructionType.CrossAtAltitudeAndSpeed =>
@@ -974,6 +977,8 @@ public partial class MainWindow : Window
             VoiceInstructionType.CrossAtAltitudeAndSpeed =>
                 $"{instruction.TextValue} {instruction.NumericValue} " +
                 $"{instruction.SecondaryNumericValue}",
+            VoiceInstructionType.ComplyWithPublishedSpeeds =>
+                instruction.TextValue ?? string.Empty,
             _ => instruction.NumericValue?.ToString() ?? string.Empty
         };
     }
