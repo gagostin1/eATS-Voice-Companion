@@ -17,6 +17,9 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Beam-search speech decoding for improved short ATC transmission recognition
 - The higher-accuracy Whisper `small.en` model replaces `base.en` for callsign and ATC phrase recognition
 - A command catalog documenting supported mappings, safety constraints, and planned command groups
+- Editable transcripts with an **Interpret again** workflow that does not require rerecording
+- Ambiguous active-callsign suggestions that remain fail-closed until the controller corrects the transcript
+- A generated, scenario-independent recognition matrix covering varied airlines, flight numbers, controller positions, STARs, command families, and recovery cases through the production interpreter
 
 ### Fixed
 

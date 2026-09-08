@@ -56,7 +56,9 @@ allowlisted token sequence can be corrected and rebuilt.
 - When strict speech parsing fails, constrained recovery may substitute a unique
   active callsign, a similar supported instruction phrase, or a similar assigned
   STAR. The recovered wording is shown to the controller. Ambiguous callsigns
-  and unsupported instructions are not guessed.
+  and unsupported instructions are not guessed. Likely active callsigns may be
+  displayed as correction hints, and the controller can edit the transcript and
+  choose **Interpret again** without making another recording.
 
 ## Next command groups
 
@@ -74,3 +76,9 @@ The remaining reference will be implemented in focused, testable groups:
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before
 it is considered supported.
+
+The shared production interpreter also has a generated scenario matrix spanning
+multiple airline identities, flight-number shapes, controller positions,
+assigned STARs, supported command families, and constrained-recovery inputs.
+New command groups should extend that matrix without encoding assumptions from
+one simulation scenario.

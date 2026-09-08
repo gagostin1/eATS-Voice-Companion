@@ -20,6 +20,8 @@ The current workflow records a controller transmission, transcribes it locally w
 - Resolves descend-via-capable assigned STARs from eATS `LogDetail.txt` and `Airways.txt`
 - Adds active airline callsigns to the speech-recognition prompt to improve callsign recognition
 - Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, and assigned STAR context
+- Lets the controller correct an imperfect transcript and interpret it again without making another recording
+- Reports likely active callsigns when a fuzzy callsign remains ambiguous instead of choosing one silently
 - Supports an optional controller position in transmissions, such as `American 1307, Atlanta Center, ...`
 - Converts single or combined recognized instructions into editable eATS command previews
 - Detects a running eATS process and displays basic process information
@@ -77,7 +79,7 @@ Snapshot and route context are loaded at startup and refreshed before transcript
 
 Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them.
 
-If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
+If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected; when useful, the error lists likely active callsigns for the controller to compare. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. The transcript itself can also be corrected and submitted with **Interpret again** without rerecording. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
 
 The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
@@ -124,6 +126,13 @@ dotnet build
 dotnet test
 ```
 
+The test suite includes a generated voice-interpretation matrix that exercises
+the same interpreter used by the application across multiple airline
+telephony names, flight-number shapes, controller positions, assigned STARs,
+strict command families, and constrained-recovery cases. This keeps recognition
+coverage independent of any one eATS scenario. Microphone transcription and
+foreground staging still require the manual checks described below.
+
 Start the application:
 
 ```powershell
@@ -169,11 +178,12 @@ The data directory can be changed in the application and is saved locally. The a
 4. Enter the exact controller position you plan to say, if any.
 5. Hold **Hold to record**, speak one or more supported instructions, and release the button.
 6. Choose **Cancel transcription** if recognition needs to be stopped.
-7. Review the transcript and generated command.
-8. Confirm that the safety message matches the expected active aircraft and, for descend via, its assigned STAR.
-9. Edit the preview fields and choose **Build preview** if a correction is needed.
-10. Choose **Stage in eATS**, review the confirmation, and approve it only if the command is correct.
-11. Inspect the staged text in the lower-left eATS radio-command field and press **Enter** yourself only when it is safe to transmit.
+7. Review the transcript and generated command. If transcription wording is incorrect, edit the transcript and choose **Interpret again**; a new recording is not required.
+8. If an ambiguous-callsign error lists possible active callsigns, correct the transcript rather than selecting a guess blindly.
+9. Confirm that the safety message matches the expected active aircraft and, for descend via, its assigned STAR.
+10. Edit the preview fields and choose **Build preview** if a correction is needed.
+11. Choose **Stage in eATS**, review the confirmation, and approve it only if the command is correct.
+12. Inspect the staged text in the lower-left eATS radio-command field and press **Enter** yourself only when it is safe to transmit.
 
 ## Known limitations
 
@@ -183,7 +193,7 @@ The data directory can be changed in the application and is saved locally. The a
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
 - Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
 - Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
-- Tests cover core behavior and file/service integration, but actual microphone hardware and WPF interaction still require manual testing.
+- Generated tests cover core interpretation across varied airlines, flight numbers, positions, STARs, and command families, plus file/service integration; actual microphone hardware and WPF interaction still require manual testing.
 - Stage-only entry depends on Windows foreground input; it aborts if eATS loses focus, and both applications should run at the same Windows privilege level.
 - There is no installer, signed release, or automatic command transmission.
 

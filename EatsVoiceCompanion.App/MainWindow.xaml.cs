@@ -43,7 +43,7 @@ public partial class MainWindow : Window
     private EatsSnapshotService _snapshotService = null!;
     private RecognitionContextService _recognitionContextService = null!;
     private SpeechWorkflowService _speechWorkflowService = null!;
-    private VoiceCommandParser _voiceCommandParser = null!;
+    private VoiceCommandInterpreter _voiceCommandInterpreter = null!;
     private CancellationTokenSource? _transcriptionCancellation;
     private IReadOnlySet<string> _activeCallsigns =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -256,7 +256,8 @@ public partial class MainWindow : Window
                 exception);
         }
 
-        _voiceCommandParser = new VoiceCommandParser(_airlineAliases);
+        _voiceCommandInterpreter = new VoiceCommandInterpreter(
+            _airlineAliases);
         EatsRouteContextService routeContextService = new(
             logDetailPath,
             airwaysPath);
@@ -832,8 +833,16 @@ public partial class MainWindow : Window
             : "Hold to record";
         RecordButton.IsEnabled = !isBusy;
         SaveSettingsButton.IsEnabled = !isBusy;
+        InterpretTranscriptButton.IsEnabled = !isBusy;
         CancelTranscriptionButton.IsEnabled = isBusy;
         CancelTranscriptionButton.Content = "Cancel transcription";
+    }
+
+    private void InterpretTranscript_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        BuildVoicePreview(TranscriptText.Text);
     }
 
     private void BuildVoicePreview(
@@ -859,63 +868,27 @@ public partial class MainWindow : Window
 
         try
         {
-            VoiceTranscriptRecoveryResult? recovery = null;
-            ParsedVoiceCommand parsed;
-
-            try
-            {
-                parsed = _voiceCommandParser.Parse(
+            VoiceCommandInterpretation interpretation =
+                _voiceCommandInterpreter.Interpret(
                     transcript,
-                    ControllerPositionTextBox.Text);
-            }
-            catch (Exception exception)
-                when (exception is ArgumentException or
-                    InvalidOperationException)
-            {
-                recovery = VoiceTranscriptRecovery.TryRecover(
-                    transcript,
+                    ControllerPositionTextBox.Text,
                     _activeCallsigns,
-                    _airlineAliases,
                     _activeStars);
-
-                if (recovery is null)
-                {
-                    throw;
-                }
-
-                parsed = _voiceCommandParser.Parse(
-                    recovery.RecoveredTranscript);
-            }
-
-            if (recovery is null && HasFuzzyNamedStarMismatch(parsed))
-            {
-                VoiceTranscriptRecoveryResult? starRecovery =
-                    VoiceTranscriptRecovery.TryRecover(
-                        transcript,
-                        _activeCallsigns,
-                        _airlineAliases,
-                        _activeStars);
-
-                if (starRecovery?.StarWasCorrected == true)
-                {
-                    parsed = _voiceCommandParser.Parse(
-                        starRecovery.RecoveredTranscript);
-                    recovery = starRecovery;
-                }
-            }
+            ParsedVoiceCommand parsed = interpretation.Command;
 
             string transmission = EatsTransmissionValidator.Validate(
                 parsed.ToEatsCommand());
 
             ApplyParsedCommandToEditor(parsed);
             PreviewText.Text = transmission;
-            _currentPreviewWasRecovered = recovery is not null;
+            _currentPreviewWasRecovered =
+                interpretation.Kind == VoiceInterpretationKind.Recovered;
             ConfigureRouteRequirement(
                 transmission,
                 GetSpokenStar(parsed));
             PrepareNewPreviewForStaging();
             UpdateCommandSafetyStatus(parsed.Callsign);
-            if (recovery is null)
+            if (interpretation.Kind == VoiceInterpretationKind.Strict)
             {
                 SpeechStatusText.Text =
                     "Transcription completed and command preview generated.";
@@ -925,15 +898,15 @@ public partial class MainWindow : Window
                 SpeechStatusText.Text =
                     "Best-effort interpretation generated. Review every " +
                     "field carefully before staging:\n" +
-                    recovery.RecoveredTranscript;
+                    interpretation.InterpretedTranscript;
 
                 _logger.Warning(
                     "VoiceTranscriptRecovered",
                     "A constrained best-effort voice interpretation was used.",
                     new
                     {
-                        recovery.InstructionPhrase,
-                        recovery.StarWasCorrected
+                        interpretation.RecoveredInstructionPhrase,
+                        interpretation.StarWasCorrected
                     });
             }
         }
@@ -1123,20 +1096,6 @@ public partial class MainWindow : Window
             _ => throw new InvalidOperationException(
                 "A command cannot reference more than one STAR.")
         };
-    }
-
-    private bool HasFuzzyNamedStarMismatch(ParsedVoiceCommand parsed)
-    {
-        string? spokenStar = GetSpokenStar(parsed);
-
-        return spokenStar is not null &&
-               _activeStars.TryGetValue(
-                   parsed.Callsign,
-                   out string? assignedStar) &&
-               !string.Equals(
-                   spokenStar,
-                   assignedStar,
-                   StringComparison.OrdinalIgnoreCase);
     }
 
     private void RefreshExistingPreviewSafety()

@@ -66,7 +66,8 @@ public static partial class VoiceTranscriptRecovery
         CallsignMatch? callsign = FindCallsign(
             callsignAndPosition,
             activeCallsigns,
-            airlineAliases);
+            airlineAliases,
+            out _);
 
         if (callsign is null)
         {
@@ -103,6 +104,42 @@ public static partial class VoiceTranscriptRecovery
             callsign.Callsign,
             instruction.Phrase,
             starWasCorrected);
+    }
+
+    public static IReadOnlyList<string> SuggestCallsigns(
+        string transcript,
+        IEnumerable<string> activeCallsigns,
+        IReadOnlyDictionary<string, string> airlineAliases,
+        int maximumSuggestions = 3)
+    {
+        if (string.IsNullOrWhiteSpace(transcript) ||
+            maximumSuggestions < 1)
+        {
+            return Array.Empty<string>();
+        }
+
+        ArgumentNullException.ThrowIfNull(activeCallsigns);
+        ArgumentNullException.ThrowIfNull(airlineAliases);
+
+        string normalized = NormalizeObservedPhrases(
+            NormalizeWords(transcript));
+        string[] tokens = normalized.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+        InstructionMatch? instruction = FindInstruction(tokens);
+
+        if (instruction is null || instruction.StartIndex == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        _ = FindCallsign(
+            tokens[..instruction.StartIndex],
+            activeCallsigns,
+            airlineAliases,
+            out IReadOnlyList<string> candidates);
+
+        return candidates.Take(maximumSuggestions).ToArray();
     }
 
     private static InstructionMatch? FindInstruction(string[] tokens)
@@ -148,7 +185,8 @@ public static partial class VoiceTranscriptRecovery
     private static CallsignMatch? FindCallsign(
         string[] tokens,
         IEnumerable<string> activeCallsigns,
-        IReadOnlyDictionary<string, string> airlineAliases)
+        IReadOnlyDictionary<string, string> airlineAliases,
+        out IReadOnlyList<string> candidates)
     {
         Dictionary<string, string[]> aliasesByDesignator = airlineAliases
             .Where(pair =>
@@ -243,6 +281,10 @@ public static partial class VoiceTranscriptRecovery
             .GroupBy(match => match.Callsign)
             .Select(group => group.MaxBy(match => match.Score)!)
             .OrderByDescending(match => match.Score)
+            .ToArray();
+
+        candidates = ranked
+            .Select(match => match.Callsign)
             .ToArray();
 
         if (ranked.Length == 0 || ranked[0].Score < MinimumCallsignScore)
