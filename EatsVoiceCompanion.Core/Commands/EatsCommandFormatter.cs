@@ -104,6 +104,44 @@ public static class EatsCommandFormatter
 
     public static string MaintainSpeed(int speedKnots)
     {
+        ValidateSpeed(speedKnots);
+        return $"S{speedKnots}";
+    }
+
+    public static string MaintainSpeedOrGreater(int speedKnots) =>
+        MaintainSpeed(speedKnots) + "+";
+
+    public static string MaintainSpeedOrLess(int speedKnots) =>
+        MaintainSpeed(speedKnots) + "-";
+
+    public static string MaintainMach(int machHundredths)
+    {
+        if (machHundredths is < 50 or > 99)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(machHundredths),
+                "Mach must be between .50 and .99.");
+        }
+
+        return $"MM{machHundredths:D2}";
+    }
+
+    public static string MaintainMachOrGreater(int machHundredths) =>
+        MaintainMach(machHundredths) + "+";
+
+    public static string MaintainMachOrLess(int machHundredths) =>
+        MaintainMach(machHundredths) + "-";
+
+    public static string ResumeNormalSpeed() => "RNS";
+
+    public static string SayIndicatedSpeed() => "SI";
+
+    public static string SayMach() => "SM";
+
+    public static string SayNormalSpeed() => "SNS";
+
+    private static void ValidateSpeed(int speedKnots)
+    {
         if (speedKnots is < 100 or > 350)
         {
             throw new ArgumentOutOfRangeException(
@@ -118,7 +156,6 @@ public static class EatsCommandFormatter
                 nameof(speedKnots));
         }
 
-        return $"S{speedKnots}";
     }
 
     public static string ComplyWithPublishedSpeeds(string fix)

@@ -64,6 +64,38 @@ public static class CommandPreviewBuilder
                 EatsCommandFormatter.MaintainSpeed(
                     ParseNumber(value, "speed")),
 
+            VoiceInstructionType.MaintainSpeedOrGreater =>
+                EatsCommandFormatter.MaintainSpeedOrGreater(
+                    ParseNumber(value, "speed")),
+
+            VoiceInstructionType.MaintainSpeedOrLess =>
+                EatsCommandFormatter.MaintainSpeedOrLess(
+                    ParseNumber(value, "speed")),
+
+            VoiceInstructionType.MaintainMach =>
+                EatsCommandFormatter.MaintainMach(
+                    ParseNumber(value, "Mach number")),
+
+            VoiceInstructionType.MaintainMachOrGreater =>
+                EatsCommandFormatter.MaintainMachOrGreater(
+                    ParseNumber(value, "Mach number")),
+
+            VoiceInstructionType.MaintainMachOrLess =>
+                EatsCommandFormatter.MaintainMachOrLess(
+                    ParseNumber(value, "Mach number")),
+
+            VoiceInstructionType.ResumeNormalSpeed =>
+                EatsCommandFormatter.ResumeNormalSpeed(),
+
+            VoiceInstructionType.SayIndicatedSpeed =>
+                EatsCommandFormatter.SayIndicatedSpeed(),
+
+            VoiceInstructionType.SayMach =>
+                EatsCommandFormatter.SayMach(),
+
+            VoiceInstructionType.SayNormalSpeed =>
+                EatsCommandFormatter.SayNormalSpeed(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(value!),
 

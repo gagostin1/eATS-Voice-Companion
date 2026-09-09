@@ -38,6 +38,29 @@ public sealed class VoiceCommandParserTests
         "Delta 9 maintain speed 250",
         "DAL9 S250")]
     [InlineData(
+        "Delta 9 maintain two five zero knots",
+        "DAL9 S250")]
+    [InlineData(
+        "Delta 9 maintain speed two five zero knots or greater",
+        "DAL9 S250+")]
+    [InlineData(
+        "Delta 9 maintain speed two five zero knots or less",
+        "DAL9 S250-")]
+    [InlineData(
+        "Delta 9 maintain Mach point seven six",
+        "DAL9 MM76")]
+    [InlineData(
+        "Delta 9 maintain Mach decimal seven six or greater",
+        "DAL9 MM76+")]
+    [InlineData(
+        "Delta 9 maintain Mach zero point seven six or less",
+        "DAL9 MM76-")]
+    [InlineData("Delta 9 resume normal speed", "DAL9 RNS")]
+    [InlineData("Delta 9 say indicated speed", "DAL9 SI")]
+    [InlineData("Delta 9 say airspeed", "DAL9 SI")]
+    [InlineData("Delta 9 say Mach number", "DAL9 SM")]
+    [InlineData("Delta 9 say normal speed and Mach", "DAL9 SNS")]
+    [InlineData(
         "Delta 123 proceed direct to LOZIT",
         "DAL123 ..LOZIT")]
     [InlineData(

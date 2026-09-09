@@ -80,6 +80,15 @@ public sealed class CommandPreviewBuilderTests
         VoiceInstructionType.SayAltitude,
         "",
         "DAL123 SA")]
+    [InlineData(VoiceInstructionType.MaintainSpeedOrGreater, "250", "DAL123 S250+")]
+    [InlineData(VoiceInstructionType.MaintainSpeedOrLess, "250", "DAL123 S250-")]
+    [InlineData(VoiceInstructionType.MaintainMach, "76", "DAL123 MM76")]
+    [InlineData(VoiceInstructionType.MaintainMachOrGreater, "76", "DAL123 MM76+")]
+    [InlineData(VoiceInstructionType.MaintainMachOrLess, "76", "DAL123 MM76-")]
+    [InlineData(VoiceInstructionType.ResumeNormalSpeed, "", "DAL123 RNS")]
+    [InlineData(VoiceInstructionType.SayIndicatedSpeed, "", "DAL123 SI")]
+    [InlineData(VoiceInstructionType.SayMach, "", "DAL123 SM")]
+    [InlineData(VoiceInstructionType.SayNormalSpeed, "", "DAL123 SNS")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,

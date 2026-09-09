@@ -60,7 +60,8 @@ public static partial class EatsTransmissionValidator
 
     private static bool IsAllowedInstruction(string instruction)
     {
-        if (instruction is "R" or "DV" or "EXP" or "SA" ||
+        if (instruction is "R" or "DV" or "EXP" or "SA" or
+                "RNS" or "SI" or "SM" or "SNS" ||
             DirectPattern().IsMatch(instruction) ||
             AltimeterPattern().IsMatch(instruction) ||
             PublishedSpeedPattern().IsMatch(instruction) ||
@@ -117,10 +118,8 @@ public static partial class EatsTransmissionValidator
                    "RR",
                    value => EatsCommandFormatter.ReportReachingAltitude(
                        checked(value * 100))) ||
-               IsFormattedNumber(
-                   instruction,
-                   "S",
-                   EatsCommandFormatter.MaintainSpeed);
+               IsValidSpeed(instruction) ||
+               IsValidMach(instruction);
     }
 
     private static void ValidateExpediteOrder(string[] instructions)
@@ -242,13 +241,13 @@ public static partial class EatsTransmissionValidator
         {
             bool speedBeforeDescendVia = instructions
                 .Take(firstDescendViaIndex)
-                .Any(instruction => SpeedPattern().IsMatch(instruction));
+                .Any(IsAssignedSpeedOrMach);
 
             if (speedBeforeDescendVia)
             {
                 throw new ArgumentException(
                     "A descend-via command must precede an assigned speed " +
-                    "because eATS cancels earlier speed assignments.",
+                    "or Mach because eATS cancels earlier assignments.",
                     nameof(instructions));
             }
         }
@@ -294,12 +293,67 @@ public static partial class EatsTransmissionValidator
 
         if (instructions
             .Skip(publishedSpeedIndex + 1)
-            .Any(instruction => SpeedPattern().IsMatch(instruction)))
+            .Any(IsAssignedSpeedOrMach))
         {
             throw new ArgumentException(
-                "An assigned speed must precede published-speed " +
+                "An assigned speed or Mach must precede published-speed " +
                 "compliance in the same preview.",
                 nameof(instructions));
+        }
+    }
+
+    private static bool IsAssignedSpeedOrMach(string instruction) =>
+        SpeedPattern().IsMatch(instruction) ||
+        MachPattern().IsMatch(instruction);
+
+    private static bool IsValidSpeed(string instruction) =>
+        IsValidLimitedInstruction(
+            instruction,
+            SpeedPattern(),
+            "value",
+            EatsCommandFormatter.MaintainSpeed,
+            EatsCommandFormatter.MaintainSpeedOrGreater,
+            EatsCommandFormatter.MaintainSpeedOrLess);
+
+    private static bool IsValidMach(string instruction) =>
+        IsValidLimitedInstruction(
+            instruction,
+            MachPattern(),
+            "value",
+            EatsCommandFormatter.MaintainMach,
+            EatsCommandFormatter.MaintainMachOrGreater,
+            EatsCommandFormatter.MaintainMachOrLess);
+
+    private static bool IsValidLimitedInstruction(
+        string instruction,
+        Regex pattern,
+        string valueGroup,
+        Func<int, string> exactFormatter,
+        Func<int, string> greaterFormatter,
+        Func<int, string> lessFormatter)
+    {
+        Match match = pattern.Match(instruction);
+
+        if (!match.Success ||
+            !int.TryParse(match.Groups[valueGroup].Value, out int value))
+        {
+            return false;
+        }
+
+        Func<int, string> formatter = match.Groups["limit"].Value switch
+        {
+            "+" => greaterFormatter,
+            "-" => lessFormatter,
+            _ => exactFormatter
+        };
+
+        try
+        {
+            return instruction == formatter(value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
         }
     }
 
@@ -333,7 +387,7 @@ public static partial class EatsTransmissionValidator
         }
     }
 
-    [GeneratedRegex("\\A[A-Z0-9.@ ]+\\z", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("\\A[A-Z0-9.@+\\- ]+\\z", RegexOptions.CultureInvariant)]
     private static partial Regex AllowedCharactersPattern();
 
     [GeneratedRegex("^[A-Z0-9]{2,7}$", RegexOptions.CultureInvariant)]
@@ -357,8 +411,11 @@ public static partial class EatsTransmissionValidator
         RegexOptions.CultureInvariant)]
     private static partial Regex CrossAtPattern();
 
-    [GeneratedRegex("^(?:M?S)[0-9]{3}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^S(?<value>[0-9]{3})(?<limit>[+-]?)$", RegexOptions.CultureInvariant)]
     private static partial Regex SpeedPattern();
+
+    [GeneratedRegex("^MM(?<value>[0-9]{2})(?<limit>[+-]?)$", RegexOptions.CultureInvariant)]
+    private static partial Regex MachPattern();
 
     [GeneratedRegex("^EXP(?:[0-9]{2,3})?$", RegexOptions.CultureInvariant)]
     private static partial Regex ExpeditePattern();

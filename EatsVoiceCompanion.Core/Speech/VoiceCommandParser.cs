@@ -88,6 +88,14 @@ public sealed partial class VoiceCommandParser
             VoiceInstructionType.MaintainSpeed),
 
         new(
+            "maintain mach",
+            VoiceInstructionType.MaintainMach),
+
+        new(
+            "maintain",
+            VoiceInstructionType.MaintainSpeed),
+
+        new(
             "comply with published speed restrictions at",
             VoiceInstructionType.ComplyWithPublishedSpeeds,
             IsFix: true),
@@ -123,6 +131,14 @@ public sealed partial class VoiceCommandParser
             .Select(pattern => pattern.Phrase)
             .Concat(new[]
             {
+                "say normal speed and mach",
+                "say normal speed or mach",
+                "say normal speed",
+                "say indicated speed",
+                "say airspeed",
+                "say mach number",
+                "say mach",
+                "resume normal speed",
                 "descend via",
                 "expedite",
                 "say altitude",
@@ -213,6 +229,16 @@ public sealed partial class VoiceCommandParser
                     new ParsedVoiceInstruction(
                         VoiceInstructionType.SayAltitude));
                 remaining = afterSayAltitude;
+                continue;
+            }
+
+            if (TryParseNoValueInstruction(
+                    remaining,
+                    out ParsedVoiceInstruction? noValueInstruction,
+                    out string afterNoValue))
+            {
+                instructions.Add(noValueInstruction);
+                remaining = afterNoValue;
                 continue;
             }
 
@@ -438,10 +464,52 @@ public sealed partial class VoiceCommandParser
                 TextValue: ParseFix(value));
         }
 
-        if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed &&
-            value.EndsWith(" knots", StringComparison.Ordinal))
+        if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed)
         {
-            value = value[..^" knots".Length].Trim();
+            VoiceInstructionType type = ParseLimitSuffix(
+                ref value,
+                VoiceInstructionType.MaintainSpeed,
+                VoiceInstructionType.MaintainSpeedOrGreater,
+                VoiceInstructionType.MaintainSpeedOrLess);
+
+            bool saysKnots = value.EndsWith(" knots", StringComparison.Ordinal);
+
+            if (saysKnots)
+            {
+                value = value[..^" knots".Length].Trim();
+            }
+
+            if (pattern.Phrase == "maintain" && !saysKnots)
+            {
+                throw new InvalidOperationException(
+                    "A standalone speed assignment must include 'knots'.");
+            }
+
+            return new ParsedVoiceInstruction(
+                type,
+                NumericValue: AviationNumberParser.Parse(value));
+        }
+
+        if (pattern.InstructionType == VoiceInstructionType.MaintainMach)
+        {
+            VoiceInstructionType type = ParseLimitSuffix(
+                ref value,
+                VoiceInstructionType.MaintainMach,
+                VoiceInstructionType.MaintainMachOrGreater,
+                VoiceInstructionType.MaintainMachOrLess);
+
+            foreach (string prefix in new[] { "zero point ", "point ", "decimal " })
+            {
+                if (value.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    value = value[prefix.Length..].Trim();
+                    break;
+                }
+            }
+
+            return new ParsedVoiceInstruction(
+                type,
+                NumericValue: AviationNumberParser.Parse(value));
         }
 
         int numericValue = pattern.IsFlightLevel
@@ -453,6 +521,61 @@ public sealed partial class VoiceCommandParser
         return new ParsedVoiceInstruction(
             pattern.InstructionType,
             NumericValue: numericValue);
+    }
+
+    private static VoiceInstructionType ParseLimitSuffix(
+        ref string value,
+        VoiceInstructionType exact,
+        VoiceInstructionType orGreater,
+        VoiceInstructionType orLess)
+    {
+        if (value.EndsWith(" or greater", StringComparison.Ordinal))
+        {
+            value = value[..^" or greater".Length].Trim();
+            return orGreater;
+        }
+
+        if (value.EndsWith(" or less", StringComparison.Ordinal))
+        {
+            value = value[..^" or less".Length].Trim();
+            return orLess;
+        }
+
+        return exact;
+    }
+
+    private static bool TryParseNoValueInstruction(
+        string remaining,
+        out ParsedVoiceInstruction instruction,
+        out string afterInstruction)
+    {
+        (string Phrase, VoiceInstructionType Type)[] patterns =
+        [
+            ("say normal speed and mach", VoiceInstructionType.SayNormalSpeed),
+            ("say normal speed or mach", VoiceInstructionType.SayNormalSpeed),
+            ("say normal speed", VoiceInstructionType.SayNormalSpeed),
+            ("say indicated speed", VoiceInstructionType.SayIndicatedSpeed),
+            ("say airspeed", VoiceInstructionType.SayIndicatedSpeed),
+            ("say mach number", VoiceInstructionType.SayMach),
+            ("say mach", VoiceInstructionType.SayMach),
+            ("resume normal speed", VoiceInstructionType.ResumeNormalSpeed)
+        ];
+
+        foreach (var pattern in patterns)
+        {
+            if (!StartsWithPhrase(remaining, pattern.Phrase))
+            {
+                continue;
+            }
+
+            instruction = new ParsedVoiceInstruction(pattern.Type);
+            afterInstruction = remaining[pattern.Phrase.Length..].Trim();
+            return true;
+        }
+
+        instruction = null!;
+        afterInstruction = remaining;
+        return false;
     }
 
     private static (

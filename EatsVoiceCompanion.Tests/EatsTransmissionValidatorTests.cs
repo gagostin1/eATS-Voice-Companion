@@ -23,6 +23,12 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 DM120 EXP", "AAL123 DM120 EXP")]
     [InlineData("AAL123 EXP280", "AAL123 EXP280")]
     [InlineData("AAL123 RL240 RR120 SA", "AAL123 RL240 RR120 SA")]
+    [InlineData("AAL123 S250+", "AAL123 S250+")]
+    [InlineData("AAL123 S250-", "AAL123 S250-")]
+    [InlineData("AAL123 MM76", "AAL123 MM76")]
+    [InlineData("AAL123 MM76+", "AAL123 MM76+")]
+    [InlineData("AAL123 MM76-", "AAL123 MM76-")]
+    [InlineData("AAL123 RNS SI SM SNS", "AAL123 RNS SI SM SNS")]
     [InlineData("AAL123 XOZZZI@120", "AAL123 XOZZZI@120")]
     [InlineData(
         "AAL123 XOZZZI@120@250K A2992",
@@ -46,6 +52,10 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 FH361")]
     [InlineData("AAL123 CM999")]
     [InlineData("AAL123 S351")]
+    [InlineData("AAL123 S250++")]
+    [InlineData("AAL123 MM49")]
+    [InlineData("AAL123 MM100")]
+    [InlineData("AAL123 MM76+-")]
     [InlineData("AAL123 ..A")]
     [InlineData("AAL123 A992")]
     [InlineData("AAL123 DVXM")]

@@ -126,6 +126,38 @@ public sealed record ParsedVoiceCommand
                 EatsCommandFormatter.MaintainSpeed(
                     RequireNumericValue(instruction)),
 
+            VoiceInstructionType.MaintainSpeedOrGreater =>
+                EatsCommandFormatter.MaintainSpeedOrGreater(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.MaintainSpeedOrLess =>
+                EatsCommandFormatter.MaintainSpeedOrLess(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.MaintainMach =>
+                EatsCommandFormatter.MaintainMach(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.MaintainMachOrGreater =>
+                EatsCommandFormatter.MaintainMachOrGreater(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.MaintainMachOrLess =>
+                EatsCommandFormatter.MaintainMachOrLess(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.ResumeNormalSpeed =>
+                EatsCommandFormatter.ResumeNormalSpeed(),
+
+            VoiceInstructionType.SayIndicatedSpeed =>
+                EatsCommandFormatter.SayIndicatedSpeed(),
+
+            VoiceInstructionType.SayMach =>
+                EatsCommandFormatter.SayMach(),
+
+            VoiceInstructionType.SayNormalSpeed =>
+                EatsCommandFormatter.SayNormalSpeed(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(
                     RequireTextValue(instruction)),

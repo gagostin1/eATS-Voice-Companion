@@ -158,6 +158,29 @@ public sealed class EatsCommandFormatterTests
     }
 
     [Fact]
+    public void SpeedAndMachCommands_UseDocumentedEatsSyntax()
+    {
+        Assert.Equal("S250+", EatsCommandFormatter.MaintainSpeedOrGreater(250));
+        Assert.Equal("S250-", EatsCommandFormatter.MaintainSpeedOrLess(250));
+        Assert.Equal("MM76", EatsCommandFormatter.MaintainMach(76));
+        Assert.Equal("MM76+", EatsCommandFormatter.MaintainMachOrGreater(76));
+        Assert.Equal("MM76-", EatsCommandFormatter.MaintainMachOrLess(76));
+        Assert.Equal("RNS", EatsCommandFormatter.ResumeNormalSpeed());
+        Assert.Equal("SI", EatsCommandFormatter.SayIndicatedSpeed());
+        Assert.Equal("SM", EatsCommandFormatter.SayMach());
+        Assert.Equal("SNS", EatsCommandFormatter.SayNormalSpeed());
+    }
+
+    [Theory]
+    [InlineData(49)]
+    [InlineData(100)]
+    public void MachOutsideRange_IsRejected(int mach)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => EatsCommandFormatter.MaintainMach(mach));
+    }
+
+    [Fact]
     public void PartialHundredsAltitude_IsRejected()
     {
         Assert.Throws<ArgumentException>(

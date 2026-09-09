@@ -18,6 +18,15 @@ contains only the compatibility facts needed by the original companion code.
 | Climb and maintain FL230 | `CM230` | `23000` |
 | Descend and maintain 12,000 | `DM120` | `12000` |
 | Maintain 250 knots | `S250` | `250` |
+| Maintain 250 knots or greater | `S250+` | `250` |
+| Maintain 250 knots or less | `S250-` | `250` |
+| Maintain Mach .76 | `MM76` | `76` |
+| Maintain Mach .76 or greater | `MM76+` | `76` |
+| Maintain Mach .76 or less | `MM76-` | `76` |
+| Resume normal speed | `RNS` | none |
+| Say indicated speed | `SI` | none |
+| Say Mach | `SM` | none |
+| Say normal speed/Mach | `SNS` | none |
 | Descend via, comply with speed restrictions at HOMER | `DV CWS@HOMER` | `HOMER` |
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
@@ -49,12 +58,20 @@ allowlisted token sequence can be corrected and rebuilt.
   companion does not generate eATS's one- or two-character fix abbreviations.
 - Assigned indicated speeds must be from 100 through 350 knots in 5-knot
   increments, matching FAA controller phraseology.
-- `DV` or `DVXM` must precede an assigned speed in the same transmission because
-  eATS cancels speed assignments that appear before descend via.
+- Assigned Mach numbers must be from .50 through .99. `+` means "or greater"
+  and `-` means "or less" for both assigned indicated speed and Mach.
+- eATS permits simultaneous indicated-speed and Mach assignments and follows
+  the more restrictive value. `RNS` removes controller-assigned speed and Mach;
+  during descend via it returns the aircraft to published speeds.
+- Reduce-to-final-approach-speed (`S-`) remains unsupported because it requires
+  an approach clearance and that simulator state is not yet available to the
+  companion's safety evaluator.
+- `DV` or `DVXM` must precede an assigned speed or Mach in the same transmission
+  because eATS cancels assignments that appear before descend via.
 - Published-speed compliance emits canonical `CWS@<fix>` output. The supplied
   eATS reference also accepts `PS@<fix>`, but the companion does not emit that
   alias. `CWS` is accepted only after `DV` or `DVXM` in the same preview. An
-  assigned speed must appear between descend via and `CWS`. A later direct or
+  assigned speed or Mach must appear between descend via and `CWS`. A later direct or
   descend-via token requires `CWS` to be reissued after it.
 - The simulator requires the named fix to have an applicable charted speed. The
   companion validates the syntax and command order but does not currently parse
@@ -88,12 +105,11 @@ allowlisted token sequence can be corrected and rebuilt.
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Speed and Mach variants, including resume-normal-speed.
-2. Approach and vector-to-final instructions.
-3. Frequency changes and communication responses.
-4. Holding instructions and options.
-5. Transponder commands.
-6. Initial-clearance and release commands.
+1. Approach and vector-to-final instructions.
+2. Frequency changes and communication responses.
+3. Holding instructions and options.
+4. Transponder commands.
+5. Initial-clearance and release commands.
 
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before
