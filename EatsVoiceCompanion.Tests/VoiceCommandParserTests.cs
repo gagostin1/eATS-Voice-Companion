@@ -160,6 +160,56 @@ public sealed class VoiceCommandParserTests
             EatsTransmissionValidator.Validate(parsed.ToEatsCommand()));
     }
 
+    [Theory]
+    [InlineData(
+        "American 1307 descend at pilot's discretion maintain one two thousand",
+        "AAL1307 PD120")]
+    [InlineData(
+        "American 1307 descend at pilots discretion to flight level two four zero",
+        "AAL1307 PD240")]
+    [InlineData(
+        "American 1307 expedite",
+        "AAL1307 EXP")]
+    [InlineData(
+        "American 1307 expedite descent through flight level two eight zero",
+        "AAL1307 EXP280")]
+    [InlineData(
+        "American 1307 expedite climb to one two thousand",
+        "AAL1307 EXP120")]
+    [InlineData(
+        "American 1307 report leaving flight level two four zero",
+        "AAL1307 RL240")]
+    [InlineData(
+        "American 1307 report reaching one two thousand",
+        "AAL1307 RR120")]
+    [InlineData(
+        "American 1307 say altitude",
+        "AAL1307 SA")]
+    public void Parse_AcceptsAltitudeOperations(
+        string transcript,
+        string expected)
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(transcript);
+
+        Assert.Equal(expected, parsed.ToEatsCommand());
+        Assert.Equal(
+            expected,
+            EatsTransmissionValidator.Validate(parsed.ToEatsCommand()));
+    }
+
+    [Fact]
+    public void Parse_AcceptsAltitudeCommandFollowedByExpedite()
+    {
+        ParsedVoiceCommand parsed = _parser.Parse(
+            "American 1307 descend and maintain one two thousand " +
+            "then expedite");
+
+        Assert.Equal("AAL1307 DM120 EXP", parsed.ToEatsCommand());
+        Assert.Equal(
+            "AAL1307 DM120 EXP",
+            EatsTransmissionValidator.Validate(parsed.ToEatsCommand()));
+    }
+
     [Fact]
     public void Parse_AcceptsMultipleIndependentInstructions()
     {

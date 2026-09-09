@@ -38,6 +38,28 @@ public static class CommandPreviewBuilder
                 EatsCommandFormatter.DescendViaExceptMaintain(
                     ParseNumber(value, "altitude")),
 
+            VoiceInstructionType.DescendAtPilotsDiscretion =>
+                EatsCommandFormatter.DescendAtPilotsDiscretion(
+                    ParseNumber(value, "altitude")),
+
+            VoiceInstructionType.Expedite =>
+                EatsCommandFormatter.Expedite(),
+
+            VoiceInstructionType.ExpediteThroughAltitude =>
+                EatsCommandFormatter.ExpediteThroughAltitude(
+                    ParseNumber(value, "altitude")),
+
+            VoiceInstructionType.ReportLeavingAltitude =>
+                EatsCommandFormatter.ReportLeavingAltitude(
+                    ParseNumber(value, "altitude")),
+
+            VoiceInstructionType.ReportReachingAltitude =>
+                EatsCommandFormatter.ReportReachingAltitude(
+                    ParseNumber(value, "altitude")),
+
+            VoiceInstructionType.SayAltitude =>
+                EatsCommandFormatter.SayAltitude(),
+
             VoiceInstructionType.MaintainSpeed =>
                 EatsCommandFormatter.MaintainSpeed(
                     ParseNumber(value, "speed")),

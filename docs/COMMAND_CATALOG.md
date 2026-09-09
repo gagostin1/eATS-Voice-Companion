@@ -24,6 +24,12 @@ contains only the compatibility facts needed by the original companion code.
 | The Atlanta altimeter 29.92 | `A2992` | `2992` |
 | Descend via / descend via the BANKR Five arrival | `DV` | none |
 | Descend via the BANKR Five arrival except maintain 12,000 | `DVXM120` | `12000` |
+| Descend at pilot's discretion, maintain 12,000 | `PD120` | `12000` |
+| Expedite the current altitude clearance | `EXP` | none |
+| Expedite descent through/to FL280 | `EXP280` | `28000` |
+| Report leaving FL240 | `RL240` | `24000` |
+| Report reaching 12,000 | `RR120` | `12000` |
+| Say altitude | `SA` | none |
 | Cross OZZZI at 12,000 | `XOZZZI@120` | `OZZZI 12000` |
 | Cross OZZZI at and maintain 12,000 at 250 knots | `XOZZZI@120@250K` | `OZZZI 12000 250` |
 
@@ -53,6 +59,15 @@ allowlisted token sequence can be corrected and rebuilt.
 - The simulator requires the named fix to have an applicable charted speed. The
   companion validates the syntax and command order but does not currently parse
   charted speed restrictions from procedure data.
+- `EXP` expedites the current assigned altitude; `EXP<altitude>` expedites
+  through or to the stated altitude. eATS does not accept expedite during
+  descend via, and applying it to a pilot's-discretion descent changes that
+  descent to descend-and-maintain behavior. The companion rejects both
+  combinations rather than silently changing the clearance semantics.
+- A plain or altitude-qualified `EXP` must follow the final altitude command in
+  a combined preview because a later `CM`, `DM`, crossing, `DV`, or other
+  altitude instruction cancels expedite in eATS. The companion cannot determine
+  whether an existing approach clearance independently prevents expedite.
 - `CROSS ... AT OR ABOVE` and `CROSS ... AT OR BELOW` are not generated because
   the supplied eATS radio reference does not define equivalent tokens.
 - Every `DV` or `DVXM` preview requires a fresh, unambiguous assigned STAR from
@@ -73,13 +88,12 @@ allowlisted token sequence can be corrected and rebuilt.
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Pilot's-discretion descent, expedite, and altitude reporting.
-2. Speed and Mach variants, including resume-normal-speed.
-3. Approach and vector-to-final instructions.
-4. Frequency changes and communication responses.
-5. Holding instructions and options.
-6. Transponder commands.
-7. Initial-clearance and release commands.
+1. Speed and Mach variants, including resume-normal-speed.
+2. Approach and vector-to-final instructions.
+3. Frequency changes and communication responses.
+4. Holding instructions and options.
+5. Transponder commands.
+6. Initial-clearance and release commands.
 
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before

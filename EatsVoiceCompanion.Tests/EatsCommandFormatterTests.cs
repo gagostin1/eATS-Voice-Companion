@@ -98,6 +98,20 @@ public sealed class EatsCommandFormatterTests
         Assert.Equal(
             "CWS@HOMER",
             EatsCommandFormatter.ComplyWithPublishedSpeeds("homer"));
+        Assert.Equal(
+            "PD120",
+            EatsCommandFormatter.DescendAtPilotsDiscretion(12000));
+        Assert.Equal("EXP", EatsCommandFormatter.Expedite());
+        Assert.Equal(
+            "EXP280",
+            EatsCommandFormatter.ExpediteThroughAltitude(28000));
+        Assert.Equal(
+            "RL240",
+            EatsCommandFormatter.ReportLeavingAltitude(24000));
+        Assert.Equal(
+            "RR120",
+            EatsCommandFormatter.ReportReachingAltitude(12000));
+        Assert.Equal("SA", EatsCommandFormatter.SayAltitude());
     }
 
     [Fact]

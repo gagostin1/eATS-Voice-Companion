@@ -21,6 +21,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Ambiguous active-callsign suggestions that remain fail-closed until the controller corrects the transcript
 - A generated, scenario-independent recognition matrix covering varied airlines, flight numbers, controller positions, STARs, command families, and recovery cases through the production interpreter
 - Published-speed compliance at a named fix using canonical `CWS@FIX` output, descend-via context enforcement, safe ordering, speech parsing, and manual preview support
+- Pilot's-discretion descent, expedite-current, expedite-through/to-altitude, report-leaving/reaching-altitude, and say-altitude commands with speech, editor, allowlist, ordering, and scenario-matrix coverage
 
 ### Fixed
 
@@ -30,7 +31,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 ### Planned
 
 - General-aviation callsign phraseology
-- Additional route, speed, approach, communication, holding, transponder, and initial-clearance commands
+- Additional speed, Mach, route, approach, communication, holding, transponder, and initial-clearance commands
 
 ## [0.1.0] - 2026-09-06
 

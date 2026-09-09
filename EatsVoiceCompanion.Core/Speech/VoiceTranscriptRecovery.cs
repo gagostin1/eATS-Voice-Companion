@@ -21,6 +21,20 @@ public static partial class VoiceTranscriptRecovery
         "climb and maintain flight level",
         "descend and maintain flight level",
         "descend via except maintain",
+        "descend at pilots discretion maintain flight level",
+        "descend at pilots discretion to flight level",
+        "descend at pilots discretion maintain",
+        "descend at pilots discretion to",
+        "expedite through flight level",
+        "expedite to flight level",
+        "expedite through",
+        "expedite to",
+        "report leaving flight level",
+        "report reaching flight level",
+        "report leaving",
+        "report reaching",
+        "say altitude",
+        "expedite",
         "comply with published speed restrictions at",
         "comply with speed restrictions at",
         "comply with published speeds at",
@@ -493,7 +507,12 @@ public static partial class VoiceTranscriptRecovery
             @"[^\p{L}\p{N}]+",
             " ");
 
-        return Regex.Replace(normalized, @"\s+", " ").Trim();
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+
+        return Regex.Replace(
+            normalized,
+            @"\bpilot s discretion\b",
+            "pilots discretion");
     }
 
     private static string NormalizeObservedPhrases(string value)

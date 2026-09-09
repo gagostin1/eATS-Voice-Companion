@@ -182,4 +182,33 @@ public sealed class VoiceTranscriptRecoveryTests
                 .Parse(result.RecoveredTranscript)
                 .ToEatsCommand());
     }
+
+    [Theory]
+    [InlineData(
+        "Delter 123 descend at pilots discrecion maintain one two thousand",
+        "DAL123 PD120")]
+    [InlineData(
+        "Delter 123 expidite through flight level two eight zero",
+        "DAL123 EXP280")]
+    [InlineData(
+        "Delter 123 report leavin flight level two four zero",
+        "DAL123 RL240")]
+    public void TryRecover_RepairsAltitudeOperationTranscripts(
+        string transcript,
+        string expectedCommand)
+    {
+        VoiceTranscriptRecoveryResult? result =
+            VoiceTranscriptRecovery.TryRecover(
+                transcript,
+                ["DAL123"],
+                Aliases,
+                new Dictionary<string, string>());
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            expectedCommand,
+            new VoiceCommandParser(Aliases)
+                .Parse(result.RecoveredTranscript)
+                .ToEatsCommand());
+    }
 }

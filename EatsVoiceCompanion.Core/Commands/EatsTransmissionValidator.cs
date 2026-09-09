@@ -52,6 +52,7 @@ public static partial class EatsTransmissionValidator
             }
         }
 
+        ValidateExpediteOrder(instructions);
         ValidateInstructionOrder(instructions);
 
         return normalized;
@@ -59,7 +60,7 @@ public static partial class EatsTransmissionValidator
 
     private static bool IsAllowedInstruction(string instruction)
     {
-        if (instruction is "R" or "DV" ||
+        if (instruction is "R" or "DV" or "EXP" or "SA" ||
             DirectPattern().IsMatch(instruction) ||
             AltimeterPattern().IsMatch(instruction) ||
             PublishedSpeedPattern().IsMatch(instruction) ||
@@ -98,8 +99,90 @@ public static partial class EatsTransmissionValidator
                        checked(value * 100))) ||
                IsFormattedNumber(
                    instruction,
+                   "PD",
+                   value => EatsCommandFormatter.DescendAtPilotsDiscretion(
+                       checked(value * 100))) ||
+               IsFormattedNumber(
+                   instruction,
+                   "EXP",
+                   value => EatsCommandFormatter.ExpediteThroughAltitude(
+                       checked(value * 100))) ||
+               IsFormattedNumber(
+                   instruction,
+                   "RL",
+                   value => EatsCommandFormatter.ReportLeavingAltitude(
+                       checked(value * 100))) ||
+               IsFormattedNumber(
+                   instruction,
+                   "RR",
+                   value => EatsCommandFormatter.ReportReachingAltitude(
+                       checked(value * 100))) ||
+               IsFormattedNumber(
+                   instruction,
                    "S",
                    EatsCommandFormatter.MaintainSpeed);
+    }
+
+    private static void ValidateExpediteOrder(string[] instructions)
+    {
+        int[] expediteIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => ExpeditePattern().IsMatch(item.instruction))
+            .Select(item => item.index)
+            .ToArray();
+
+        if (expediteIndexes.Length == 0)
+        {
+            return;
+        }
+
+        if (expediteIndexes.Length > 1)
+        {
+            throw new ArgumentException(
+                "Only one expedite instruction can be staged at a time.",
+                nameof(instructions));
+        }
+
+        if (instructions.Any(instruction =>
+                instruction == "DV" ||
+                instruction.StartsWith("DVXM", StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                "eATS does not accept expedite while descending via.",
+                nameof(instructions));
+        }
+
+        if (instructions.Any(instruction =>
+                instruction.StartsWith("PD", StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                "Pilot's-discretion descent and expedite cannot be " +
+                "combined because expedite converts the descent to " +
+                "descend-and-maintain behavior in eATS.",
+                nameof(instructions));
+        }
+
+        int expediteIndex = expediteIndexes[0];
+
+        if (instructions
+            .Skip(expediteIndex + 1)
+            .Any(IsAltitudeCommand))
+        {
+            throw new ArgumentException(
+                "Expedite must follow the final altitude command because " +
+                "a later altitude command cancels it in eATS.",
+                nameof(instructions));
+        }
+    }
+
+    private static bool IsAltitudeCommand(string instruction)
+    {
+        return instruction == "DV" ||
+               instruction.StartsWith("CM", StringComparison.Ordinal) ||
+               instruction.StartsWith("DM", StringComparison.Ordinal) ||
+               instruction.StartsWith("DVXM", StringComparison.Ordinal) ||
+               instruction.StartsWith("PD", StringComparison.Ordinal) ||
+               CrossAtPattern().IsMatch(instruction);
     }
 
     private static bool IsValidCrossAt(string instruction)
@@ -276,4 +359,7 @@ public static partial class EatsTransmissionValidator
 
     [GeneratedRegex("^(?:M?S)[0-9]{3}$", RegexOptions.CultureInvariant)]
     private static partial Regex SpeedPattern();
+
+    [GeneratedRegex("^EXP(?:[0-9]{2,3})?$", RegexOptions.CultureInvariant)]
+    private static partial Regex ExpeditePattern();
 }

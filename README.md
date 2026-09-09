@@ -19,6 +19,7 @@ The current workflow records a controller transmission, transcribes it locally w
 - Reads active aircraft from eATS `SnapshotAuto.txt` without modifying it
 - Resolves descend-via-capable assigned STARs from eATS `LogDetail.txt` and `Airways.txt`
 - Supports published-speed compliance at a named fix while descending via, with simulator-safe command ordering
+- Supports pilot's-discretion descent, expedite, report-leaving/reaching, and say-altitude instructions
 - Adds active airline callsigns to the speech-recognition prompt to improve callsign recognition
 - Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, and assigned STAR context
 - Lets the controller correct an imperfect transcript and interpret it again without making another recording
@@ -47,6 +48,11 @@ Supported instructions:
 | Descend and maintain | `DAL123 DM100` |
 | Descend via, optionally naming the assigned STAR | `DAL123 DV` |
 | Descend via the assigned STAR except maintain | `DAL123 DVXM120` |
+| Descend at pilot's discretion | `DAL123 PD120` |
+| Expedite the current altitude clearance | `DAL123 EXP` |
+| Expedite through/to an altitude | `DAL123 EXP280` |
+| Report leaving/reaching an altitude | `DAL123 RL240` / `DAL123 RR120` |
+| Say altitude | `DAL123 SA` |
 | Maintain speed | `DAL123 S250` |
 | Descend via and comply with published speeds at a fix | `DAL123 DV CWS@HOMER` |
 | Proceed direct | `DAL123 ..LOZIT` |
@@ -62,6 +68,9 @@ Delta one two three, turn left heading two seven zero.
 United seven fourteen, climb and maintain flight level two three zero.
 American four five, descend and maintain one zero thousand five hundred.
 Brickyard fifty-five eighty-eight, descend via the BANKR Five arrival.
+Delta one two three, descend at pilot's discretion, maintain one two thousand.
+United seven fourteen, descend and maintain one two thousand, then expedite.
+American thirteen oh seven, report leaving flight level two four zero.
 American thirteen oh seven, descend via, maintain speed two five zero, then comply with speed restrictions at HOMER.
 American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
 American thirteen oh seven, Atlanta Center, welcome.
@@ -80,7 +89,7 @@ The preview displays one of three callsign states:
 
 Snapshot and route context are loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` and `LogDetail.txt` while the simulation is active. `Airways.txt` is treated as the installed static procedure database.
 
-Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them. Published-speed compliance uses the canonical `CWS@FIX` token, must follow `DV` or `DVXM` in the same preview, and must be reissued after a later direct or descend-via command.
+Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them. Published-speed compliance uses the canonical `CWS@FIX` token, must follow `DV` or `DVXM` in the same preview, and must be reissued after a later direct or descend-via command. Expedite is rejected alongside descend via or pilot's-discretion descent, and it must follow the final altitude command because a later altitude assignment cancels it in eATS.
 
 If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected; when useful, the error lists likely active callsigns for the controller to compare. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. The transcript itself can also be corrected and submitted with **Interpret again** without rerecording. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
 
@@ -194,6 +203,7 @@ The data directory can be changed in the application and is saved locally. The a
 - Named STAR runway transitions are not yet parsed; say only the base procedure name and number, such as `BANKR Five arrival`.
 - Descend-via staging requires an unambiguous assigned STAR found in fresh eATS generated-route data and marked with descend-via support in the installed procedure database.
 - Published-speed compliance is limited to a full 2-8 character fix identifier and is staged only with descend via in the same preview; the application does not determine whether that fix has a usable charted speed.
+- The companion cannot determine whether eATS currently has an approach clearance or another simulator state that independently prevents `EXP`; controllers must verify the simulator response.
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
 - Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
 - Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
@@ -211,7 +221,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with pilot's-discretion descent, expedite, and altitude-reporting instructions
+- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with Mach and additional speed-control instructions
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases

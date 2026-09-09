@@ -44,6 +44,46 @@ public sealed partial class VoiceCommandParser
             IsAltitude: true),
 
         new(
+            "descend at pilots discretion maintain flight level",
+            VoiceInstructionType.DescendAtPilotsDiscretion,
+            IsFlightLevel: true),
+
+        new(
+            "descend at pilots discretion to flight level",
+            VoiceInstructionType.DescendAtPilotsDiscretion,
+            IsFlightLevel: true),
+
+        new(
+            "descend at pilots discretion maintain",
+            VoiceInstructionType.DescendAtPilotsDiscretion,
+            IsAltitude: true),
+
+        new(
+            "descend at pilots discretion to",
+            VoiceInstructionType.DescendAtPilotsDiscretion,
+            IsAltitude: true),
+
+        new(
+            "report leaving flight level",
+            VoiceInstructionType.ReportLeavingAltitude,
+            IsFlightLevel: true),
+
+        new(
+            "report reaching flight level",
+            VoiceInstructionType.ReportReachingAltitude,
+            IsFlightLevel: true),
+
+        new(
+            "report leaving",
+            VoiceInstructionType.ReportLeavingAltitude,
+            IsAltitude: true),
+
+        new(
+            "report reaching",
+            VoiceInstructionType.ReportReachingAltitude,
+            IsAltitude: true),
+
+        new(
             "maintain speed",
             VoiceInstructionType.MaintainSpeed),
 
@@ -84,6 +124,8 @@ public sealed partial class VoiceCommandParser
             .Concat(new[]
             {
                 "descend via",
+                "expedite",
+                "say altitude",
                 "cross",
                 "the",
                 "welcome",
@@ -155,6 +197,33 @@ public sealed partial class VoiceCommandParser
                 continue;
             }
 
+            if (StartsWithPhrase(remaining, "say altitude"))
+            {
+                string afterSayAltitude =
+                    remaining["say altitude".Length..].Trim();
+
+                if (afterSayAltitude.Length > 0 &&
+                    !StartsWithInstructionOrConnector(afterSayAltitude))
+                {
+                    throw new InvalidOperationException(
+                        "The words after 'say altitude' were not recognized.");
+                }
+
+                instructions.Add(
+                    new ParsedVoiceInstruction(
+                        VoiceInstructionType.SayAltitude));
+                remaining = afterSayAltitude;
+                continue;
+            }
+
+            if (StartsWithPhrase(remaining, "expedite"))
+            {
+                var result = ParseExpedite(remaining);
+                instructions.Add(result.Instruction);
+                remaining = result.Remaining;
+                continue;
+            }
+
             if (remaining.StartsWith(
                     "cross ",
                     StringComparison.Ordinal))
@@ -213,6 +282,70 @@ public sealed partial class VoiceCommandParser
         }
 
         return instructions;
+    }
+
+    private static (
+        ParsedVoiceInstruction Instruction,
+        string Remaining) ParseExpedite(string value)
+    {
+        string remaining = value["expedite".Length..].Trim();
+
+        if (remaining.Length == 0 ||
+            StartsWithInstructionOrConnector(remaining))
+        {
+            return (
+                new ParsedVoiceInstruction(
+                    VoiceInstructionType.Expedite),
+                remaining);
+        }
+
+        foreach (string direction in new[]
+                 {
+                     "climb ",
+                     "descent ",
+                     "descend "
+                 })
+        {
+            if (remaining.StartsWith(direction, StringComparison.Ordinal))
+            {
+                remaining = remaining[direction.Length..].Trim();
+                break;
+            }
+        }
+
+        string altitudeText;
+
+        if (remaining.StartsWith("through ", StringComparison.Ordinal))
+        {
+            altitudeText = remaining["through ".Length..].Trim();
+        }
+        else if (remaining.StartsWith("to ", StringComparison.Ordinal))
+        {
+            altitudeText = remaining["to ".Length..].Trim();
+        }
+        else
+        {
+            throw new ArgumentException(
+                "An expedite altitude must say 'through' or 'to'.",
+                nameof(value));
+        }
+
+        (string altitude, string afterAltitude) = TakeValue(altitudeText);
+        bool isFlightLevel = altitude.StartsWith(
+            "flight level ",
+            StringComparison.Ordinal);
+        string numericAltitude = isFlightLevel
+            ? altitude["flight level ".Length..].Trim()
+            : altitude;
+        int altitudeFeet = isFlightLevel
+            ? checked(AviationNumberParser.Parse(numericAltitude) * 100)
+            : AviationAltitudeParser.Parse(numericAltitude);
+
+        return (
+            new ParsedVoiceInstruction(
+                VoiceInstructionType.ExpediteThroughAltitude,
+                NumericValue: altitudeFeet),
+            afterAltitude);
     }
 
     private static (
@@ -572,10 +705,15 @@ public sealed partial class VoiceCommandParser
             @"[^\p{L}\p{N}]+",
             " ");
 
-        return Regex.Replace(
+        normalized = Regex.Replace(
             normalized,
             @"\s+",
             " ").Trim();
+
+        return Regex.Replace(
+            normalized,
+            @"\bpilot s discretion\b",
+            "pilots discretion");
     }
 
     private static string RemoveControllerPosition(

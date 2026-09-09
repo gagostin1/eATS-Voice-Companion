@@ -100,6 +100,28 @@ public sealed record ParsedVoiceCommand
                 EatsCommandFormatter.DescendViaExceptMaintain(
                     RequireNumericValue(instruction)),
 
+            VoiceInstructionType.DescendAtPilotsDiscretion =>
+                EatsCommandFormatter.DescendAtPilotsDiscretion(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.Expedite =>
+                EatsCommandFormatter.Expedite(),
+
+            VoiceInstructionType.ExpediteThroughAltitude =>
+                EatsCommandFormatter.ExpediteThroughAltitude(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.ReportLeavingAltitude =>
+                EatsCommandFormatter.ReportLeavingAltitude(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.ReportReachingAltitude =>
+                EatsCommandFormatter.ReportReachingAltitude(
+                    RequireNumericValue(instruction)),
+
+            VoiceInstructionType.SayAltitude =>
+                EatsCommandFormatter.SayAltitude(),
+
             VoiceInstructionType.MaintainSpeed =>
                 EatsCommandFormatter.MaintainSpeed(
                     RequireNumericValue(instruction)),

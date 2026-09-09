@@ -36,6 +36,10 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "The Atlanta altimeter two niner niner two. " +
     "Descend via. Descend via the BANKR Five arrival. " +
     "Descend via except maintain one two thousand. " +
+    "Descend at pilot's discretion, maintain one two thousand. " +
+    "Expedite. Expedite descent through flight level two eight zero. " +
+    "Report leaving flight level two four zero. " +
+    "Report reaching one two thousand. Say altitude. " +
     "Comply with speed restrictions at HOMER. " +
     "Resume published speed at HOMER.";
 

@@ -72,6 +72,36 @@ public static class EatsCommandFormatter
         return $"DVXM{FormatAltitude(altitudeFeet)}";
     }
 
+    public static string DescendAtPilotsDiscretion(int altitudeFeet)
+    {
+        return $"PD{FormatAltitude(altitudeFeet)}";
+    }
+
+    public static string Expedite()
+    {
+        return "EXP";
+    }
+
+    public static string ExpediteThroughAltitude(int altitudeFeet)
+    {
+        return $"EXP{FormatAltitude(altitudeFeet)}";
+    }
+
+    public static string ReportLeavingAltitude(int altitudeFeet)
+    {
+        return $"RL{FormatAltitude(altitudeFeet)}";
+    }
+
+    public static string ReportReachingAltitude(int altitudeFeet)
+    {
+        return $"RR{FormatAltitude(altitudeFeet)}";
+    }
+
+    public static string SayAltitude()
+    {
+        return "SA";
+    }
+
     public static string MaintainSpeed(int speedKnots)
     {
         if (speedKnots is < 100 or > 350)

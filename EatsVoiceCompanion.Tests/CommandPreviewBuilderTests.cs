@@ -56,6 +56,30 @@ public sealed class CommandPreviewBuilderTests
         VoiceInstructionType.ComplyWithPublishedSpeeds,
         "HOMER",
         "DAL123 DV CWS@HOMER")]
+    [InlineData(
+        VoiceInstructionType.DescendAtPilotsDiscretion,
+        "12000",
+        "DAL123 PD120")]
+    [InlineData(
+        VoiceInstructionType.Expedite,
+        "",
+        "DAL123 EXP")]
+    [InlineData(
+        VoiceInstructionType.ExpediteThroughAltitude,
+        "28000",
+        "DAL123 EXP280")]
+    [InlineData(
+        VoiceInstructionType.ReportLeavingAltitude,
+        "24000",
+        "DAL123 RL240")]
+    [InlineData(
+        VoiceInstructionType.ReportReachingAltitude,
+        "12000",
+        "DAL123 RR120")]
+    [InlineData(
+        VoiceInstructionType.SayAltitude,
+        "",
+        "DAL123 SA")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,

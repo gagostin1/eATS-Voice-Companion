@@ -385,6 +385,16 @@ public partial class MainWindow : Window
             "DescendVia" => VoiceInstructionType.DescendVia,
             "DescendViaExceptMaintain" =>
                 VoiceInstructionType.DescendViaExceptMaintain,
+            "PilotsDiscretion" =>
+                VoiceInstructionType.DescendAtPilotsDiscretion,
+            "Expedite" => VoiceInstructionType.Expedite,
+            "ExpediteAltitude" =>
+                VoiceInstructionType.ExpediteThroughAltitude,
+            "ReportLeaving" =>
+                VoiceInstructionType.ReportLeavingAltitude,
+            "ReportReaching" =>
+                VoiceInstructionType.ReportReachingAltitude,
+            "SayAltitude" => VoiceInstructionType.SayAltitude,
             "Speed" => VoiceInstructionType.MaintainSpeed,
             "PublishedSpeed" =>
                 VoiceInstructionType.ComplyWithPublishedSpeeds,
@@ -954,6 +964,16 @@ public partial class MainWindow : Window
             VoiceInstructionType.DescendVia => "DescendVia",
             VoiceInstructionType.DescendViaExceptMaintain =>
                 "DescendViaExceptMaintain",
+            VoiceInstructionType.DescendAtPilotsDiscretion =>
+                "PilotsDiscretion",
+            VoiceInstructionType.Expedite => "Expedite",
+            VoiceInstructionType.ExpediteThroughAltitude =>
+                "ExpediteAltitude",
+            VoiceInstructionType.ReportLeavingAltitude =>
+                "ReportLeaving",
+            VoiceInstructionType.ReportReachingAltitude =>
+                "ReportReaching",
+            VoiceInstructionType.SayAltitude => "SayAltitude",
             VoiceInstructionType.MaintainSpeed => "Speed",
             VoiceInstructionType.ComplyWithPublishedSpeeds => "PublishedSpeed",
             VoiceInstructionType.ProceedDirect => "Direct",
