@@ -96,6 +96,24 @@ public static class CommandPreviewBuilder
             VoiceInstructionType.SayNormalSpeed =>
                 EatsCommandFormatter.SayNormalSpeed(),
 
+            VoiceInstructionType.FlyPresentHeading =>
+                EatsCommandFormatter.FlyPresentHeading(),
+
+            VoiceInstructionType.ExpectApproach =>
+                EatsCommandFormatter.ExpectApproach(value!),
+
+            VoiceInstructionType.InterceptFinalApproachCourse =>
+                EatsCommandFormatter.InterceptFinalApproachCourse(),
+
+            VoiceInstructionType.ClearedApproach =>
+                EatsCommandFormatter.ClearedApproach(),
+
+            VoiceInstructionType.SayApproachRequest =>
+                EatsCommandFormatter.SayApproachRequest(),
+
+            VoiceInstructionType.ReduceToFinalApproachSpeed =>
+                EatsCommandFormatter.ReduceToFinalApproachSpeed(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(value!),
 
@@ -120,10 +138,16 @@ public static class CommandPreviewBuilder
                 "The instruction type is not supported.")
         };
 
-        string[] instructions = instructionType ==
-            VoiceInstructionType.ComplyWithPublishedSpeeds
-                ? [EatsCommandFormatter.DescendVia(), instruction]
-                : [instruction];
+        string[] instructions = instructionType switch
+        {
+            VoiceInstructionType.ComplyWithPublishedSpeeds =>
+                [EatsCommandFormatter.DescendVia(), instruction],
+            VoiceInstructionType.InterceptFinalApproachCourse =>
+                [EatsCommandFormatter.FlyPresentHeading(), instruction],
+            VoiceInstructionType.ReduceToFinalApproachSpeed =>
+                [EatsCommandFormatter.ClearedApproach(), instruction],
+            _ => [instruction]
+        };
 
         string transmission = EatsCommandFormatter.BuildTransmission(
             callsign,

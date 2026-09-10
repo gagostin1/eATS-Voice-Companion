@@ -181,6 +181,24 @@ public sealed class EatsCommandFormatterTests
     }
 
     [Fact]
+    public void ApproachCommands_UseDocumentedEatsSyntax()
+    {
+        Assert.Equal("PH", EatsCommandFormatter.FlyPresentHeading());
+        Assert.Equal(
+            "EILS25L",
+            EatsCommandFormatter.ExpectApproach(
+                "ILS runway two five left approach"));
+        Assert.Equal(
+            "INTC",
+            EatsCommandFormatter.InterceptFinalApproachCourse());
+        Assert.Equal("CA", EatsCommandFormatter.ClearedApproach());
+        Assert.Equal("SAR", EatsCommandFormatter.SayApproachRequest());
+        Assert.Equal(
+            "S-",
+            EatsCommandFormatter.ReduceToFinalApproachSpeed());
+    }
+
+    [Fact]
     public void PartialHundredsAltitude_IsRejected()
     {
         Assert.Throws<ArgumentException>(

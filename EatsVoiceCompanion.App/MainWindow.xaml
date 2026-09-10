@@ -272,6 +272,8 @@
                                       Tag="TurnLeft"/>
                         <ComboBoxItem Content="Turn right heading"
                                       Tag="TurnRight"/>
+                        <ComboBoxItem Content="Fly present heading"
+                                      Tag="PresentHeading"/>
                         <ComboBoxItem Content="Climb and maintain"
                                       Tag="Climb"/>
                         <ComboBoxItem Content="Descend and maintain"
@@ -312,6 +314,16 @@
                                       Tag="SayMach"/>
                         <ComboBoxItem Content="Say normal speed/Mach"
                                       Tag="SayNormalSpeed"/>
+                        <ComboBoxItem Content="Expect approach"
+                                      Tag="ExpectApproach"/>
+                        <ComboBoxItem Content="Fly present heading; intercept final approach course"
+                                      Tag="InterceptFinal"/>
+                        <ComboBoxItem Content="Cleared approach"
+                                      Tag="ClearedApproach"/>
+                        <ComboBoxItem Content="Say approach request"
+                                      Tag="SayApproachRequest"/>
+                        <ComboBoxItem Content="Cleared approach; reduce to final approach speed"
+                                      Tag="ApproachSpeed"/>
                         <ComboBoxItem Content="Descend via; comply with published speeds at fix"
                                       Tag="PublishedSpeed"/>
                         <ComboBoxItem Content="Proceed direct"

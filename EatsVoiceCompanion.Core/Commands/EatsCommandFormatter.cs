@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EatsVoiceCompanion.Core.Speech;
 
 namespace EatsVoiceCompanion.Core.Commands;
 
@@ -139,6 +140,19 @@ public static class EatsCommandFormatter
     public static string SayMach() => "SM";
 
     public static string SayNormalSpeed() => "SNS";
+
+    public static string FlyPresentHeading() => "PH";
+
+    public static string ExpectApproach(string approachId) =>
+        $"E{ApproachIdNormalizer.Normalize(approachId)}";
+
+    public static string InterceptFinalApproachCourse() => "INTC";
+
+    public static string ClearedApproach() => "CA";
+
+    public static string SayApproachRequest() => "SAR";
+
+    public static string ReduceToFinalApproachSpeed() => "S-";
 
     private static void ValidateSpeed(int speedKnots)
     {

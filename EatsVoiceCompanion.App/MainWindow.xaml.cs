@@ -380,6 +380,7 @@ public partial class MainWindow : Window
             "FlyHeading" => VoiceInstructionType.FlyHeading,
             "TurnLeft" => VoiceInstructionType.TurnLeftHeading,
             "TurnRight" => VoiceInstructionType.TurnRightHeading,
+            "PresentHeading" => VoiceInstructionType.FlyPresentHeading,
             "Climb" => VoiceInstructionType.ClimbAndMaintain,
             "Descend" => VoiceInstructionType.DescendAndMaintain,
             "DescendVia" => VoiceInstructionType.DescendVia,
@@ -405,6 +406,12 @@ public partial class MainWindow : Window
             "SayIndicatedSpeed" => VoiceInstructionType.SayIndicatedSpeed,
             "SayMach" => VoiceInstructionType.SayMach,
             "SayNormalSpeed" => VoiceInstructionType.SayNormalSpeed,
+            "ExpectApproach" => VoiceInstructionType.ExpectApproach,
+            "InterceptFinal" =>
+                VoiceInstructionType.InterceptFinalApproachCourse,
+            "ClearedApproach" => VoiceInstructionType.ClearedApproach,
+            "SayApproachRequest" => VoiceInstructionType.SayApproachRequest,
+            "ApproachSpeed" => VoiceInstructionType.ReduceToFinalApproachSpeed,
             "PublishedSpeed" =>
                 VoiceInstructionType.ComplyWithPublishedSpeeds,
             "Direct" => VoiceInstructionType.ProceedDirect,
@@ -968,6 +975,7 @@ public partial class MainWindow : Window
             VoiceInstructionType.FlyHeading => "FlyHeading",
             VoiceInstructionType.TurnLeftHeading => "TurnLeft",
             VoiceInstructionType.TurnRightHeading => "TurnRight",
+            VoiceInstructionType.FlyPresentHeading => "PresentHeading",
             VoiceInstructionType.ClimbAndMaintain => "Climb",
             VoiceInstructionType.DescendAndMaintain => "Descend",
             VoiceInstructionType.DescendVia => "DescendVia",
@@ -993,6 +1001,14 @@ public partial class MainWindow : Window
             VoiceInstructionType.SayIndicatedSpeed => "SayIndicatedSpeed",
             VoiceInstructionType.SayMach => "SayMach",
             VoiceInstructionType.SayNormalSpeed => "SayNormalSpeed",
+            VoiceInstructionType.ExpectApproach => "ExpectApproach",
+            VoiceInstructionType.InterceptFinalApproachCourse =>
+                "InterceptFinal",
+            VoiceInstructionType.ClearedApproach => "ClearedApproach",
+            VoiceInstructionType.SayApproachRequest =>
+                "SayApproachRequest",
+            VoiceInstructionType.ReduceToFinalApproachSpeed =>
+                "ApproachSpeed",
             VoiceInstructionType.ComplyWithPublishedSpeeds => "PublishedSpeed",
             VoiceInstructionType.ProceedDirect => "Direct",
             VoiceInstructionType.CrossAtAltitude => "CrossAltitude",
@@ -1016,6 +1032,8 @@ public partial class MainWindow : Window
                 $"{instruction.TextValue} {instruction.NumericValue} " +
                 $"{instruction.SecondaryNumericValue}",
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
+                instruction.TextValue ?? string.Empty,
+            VoiceInstructionType.ExpectApproach =>
                 instruction.TextValue ?? string.Empty,
             _ => instruction.NumericValue?.ToString() ?? string.Empty
         };

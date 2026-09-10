@@ -158,6 +158,25 @@ public sealed record ParsedVoiceCommand
             VoiceInstructionType.SayNormalSpeed =>
                 EatsCommandFormatter.SayNormalSpeed(),
 
+            VoiceInstructionType.FlyPresentHeading =>
+                EatsCommandFormatter.FlyPresentHeading(),
+
+            VoiceInstructionType.ExpectApproach =>
+                EatsCommandFormatter.ExpectApproach(
+                    RequireTextValue(instruction)),
+
+            VoiceInstructionType.InterceptFinalApproachCourse =>
+                EatsCommandFormatter.InterceptFinalApproachCourse(),
+
+            VoiceInstructionType.ClearedApproach =>
+                EatsCommandFormatter.ClearedApproach(),
+
+            VoiceInstructionType.SayApproachRequest =>
+                EatsCommandFormatter.SayApproachRequest(),
+
+            VoiceInstructionType.ReduceToFinalApproachSpeed =>
+                EatsCommandFormatter.ReduceToFinalApproachSpeed(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(
                     RequireTextValue(instruction)),

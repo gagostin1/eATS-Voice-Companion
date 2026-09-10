@@ -15,6 +15,7 @@ contains only the compatibility facts needed by the original companion code.
 | Fly heading 270 | `FH270` | `270` |
 | Turn left heading 270 | `TLH270` | `270` |
 | Turn right heading 270 | `TRH270` | `270` |
+| Fly present heading | `PH` | none |
 | Climb and maintain FL230 | `CM230` | `23000` |
 | Descend and maintain 12,000 | `DM120` | `12000` |
 | Maintain 250 knots | `S250` | `250` |
@@ -27,6 +28,11 @@ contains only the compatibility facts needed by the original companion code.
 | Say indicated speed | `SI` | none |
 | Say Mach | `SM` | none |
 | Say normal speed/Mach | `SNS` | none |
+| Expect ILS runway 25L approach | `EILS25L` | `ILS25L` |
+| Fly present heading, intercept final approach course | `PH INTC` | none |
+| Cleared for the approach currently in the pilot route | `CA` | none |
+| Say approach request | `SAR` | none |
+| Cleared for the approach, reduce to final approach speed | `CA S-` | none |
 | Descend via, comply with speed restrictions at HOMER | `DV CWS@HOMER` | `HOMER` |
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
@@ -63,9 +69,26 @@ allowlisted token sequence can be corrected and rebuilt.
 - eATS permits simultaneous indicated-speed and Mach assignments and follows
   the more restrictive value. `RNS` removes controller-assigned speed and Mach;
   during descend via it returns the aircraft to published speeds.
-- Reduce-to-final-approach-speed (`S-`) remains unsupported because it requires
-  an approach clearance and that simulator state is not yet available to the
-  companion's safety evaluator.
+- Reduce-to-final-approach-speed (`S-`) requires `CA` earlier in the same
+  preview. This establishes the prerequisite explicitly without relying on
+  unverifiable approach-clearance state from an earlier transmission.
+- Expected approaches accept full canonical database-style identifiers for ILS,
+  RNAV, NDB, VOR, GPS, LDA, LOC, and visual approaches. Spoken runway digits,
+  left/right/center, approach suffixes such as Yankee/Zulu, and localizer back
+  course are normalized into the eATS identifier.
+- `E<approach>` cancels an existing approach clearance. In a combined preview it
+  must precede `CA`. Only one expected approach and one `CA` are accepted.
+- eATS `CA` contains no approach name and clears the approach in the current
+  pilot route. The companion therefore accepts only generic "cleared for the
+  approach" wording; it does not discard a named approach from speech and emit
+  an unverifiable `CA`.
+- `CA` cancels earlier assigned speed/Mach, descend via, expedite, and player
+  holding. Assigned speed/Mach must follow `CA`; a later `DV`/`DVXM` is rejected
+  because it would cancel the approach clearance. Expedite and `CA` cannot be
+  combined.
+- `INTC` acts on an assigned heading. Since the companion cannot prove a heading
+  retained from an earlier transmission, it requires `FH`, `TLH`, `TRH`, or `PH`
+  earlier in the same preview. If `CA` is included, it must follow `INTC`.
 - `DV` or `DVXM` must precede an assigned speed or Mach in the same transmission
   because eATS cancels assignments that appear before descend via.
 - Published-speed compliance emits canonical `CWS@<fix>` output. The supplied
@@ -105,11 +128,10 @@ allowlisted token sequence can be corrected and rebuilt.
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Approach and vector-to-final instructions.
-2. Frequency changes and communication responses.
-3. Holding instructions and options.
-4. Transponder commands.
-5. Initial-clearance and release commands.
+1. Frequency changes and communication responses.
+2. Holding instructions and options.
+3. Transponder commands.
+4. Initial-clearance and release commands.
 
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before

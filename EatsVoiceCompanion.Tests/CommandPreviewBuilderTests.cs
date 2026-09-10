@@ -89,6 +89,12 @@ public sealed class CommandPreviewBuilderTests
     [InlineData(VoiceInstructionType.SayIndicatedSpeed, "", "DAL123 SI")]
     [InlineData(VoiceInstructionType.SayMach, "", "DAL123 SM")]
     [InlineData(VoiceInstructionType.SayNormalSpeed, "", "DAL123 SNS")]
+    [InlineData(VoiceInstructionType.FlyPresentHeading, "", "DAL123 PH")]
+    [InlineData(VoiceInstructionType.ExpectApproach, "ILS25L", "DAL123 EILS25L")]
+    [InlineData(VoiceInstructionType.InterceptFinalApproachCourse, "", "DAL123 PH INTC")]
+    [InlineData(VoiceInstructionType.ClearedApproach, "", "DAL123 CA")]
+    [InlineData(VoiceInstructionType.SayApproachRequest, "", "DAL123 SAR")]
+    [InlineData(VoiceInstructionType.ReduceToFinalApproachSpeed, "", "DAL123 CA S-")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,

@@ -60,6 +60,18 @@ public sealed class VoiceCommandParserTests
     [InlineData("Delta 9 say airspeed", "DAL9 SI")]
     [InlineData("Delta 9 say Mach number", "DAL9 SM")]
     [InlineData("Delta 9 say normal speed and Mach", "DAL9 SNS")]
+    [InlineData("Delta 9 fly present heading", "DAL9 PH")]
+    [InlineData(
+        "Delta 9 expect ILS runway two five left approach",
+        "DAL9 EILS25L")]
+    [InlineData(
+        "Delta 9 fly heading two two zero then intercept the final approach course",
+        "DAL9 FH220 INTC")]
+    [InlineData("Delta 9 cleared for the approach", "DAL9 CA")]
+    [InlineData("Delta 9 say approach request", "DAL9 SAR")]
+    [InlineData(
+        "Delta 9 cleared for the approach then reduce speed to final approach speed",
+        "DAL9 CA S-")]
     [InlineData(
         "Delta 123 proceed direct to LOZIT",
         "DAL123 ..LOZIT")]

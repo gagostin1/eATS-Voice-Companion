@@ -29,6 +29,11 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 MM76+", "AAL123 MM76+")]
     [InlineData("AAL123 MM76-", "AAL123 MM76-")]
     [InlineData("AAL123 RNS SI SM SNS", "AAL123 RNS SI SM SNS")]
+    [InlineData("AAL123 PH", "AAL123 PH")]
+    [InlineData("AAL123 EILS25L", "AAL123 EILS25L")]
+    [InlineData("AAL123 FH220 INTC CA S170", "AAL123 FH220 INTC CA S170")]
+    [InlineData("AAL123 SAR", "AAL123 SAR")]
+    [InlineData("AAL123 CA S-", "AAL123 CA S-")]
     [InlineData("AAL123 XOZZZI@120", "AAL123 XOZZZI@120")]
     [InlineData(
         "AAL123 XOZZZI@120@250K A2992",
@@ -56,6 +61,8 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 MM49")]
     [InlineData("AAL123 MM100")]
     [InlineData("AAL123 MM76+-")]
+    [InlineData("AAL123 EABC25")]
+    [InlineData("AAL123 EILS")]
     [InlineData("AAL123 ..A")]
     [InlineData("AAL123 A992")]
     [InlineData("AAL123 DVXM")]
@@ -103,6 +110,26 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 EXP120 XOZZZI@100")]
     [InlineData("AAL123 DM120 EXP EXP100")]
     public void Validate_RejectsUnsafeExpediteCombinations(string input)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsTransmissionValidator.Validate(input));
+    }
+
+    [Theory]
+    [InlineData("AAL123 INTC")]
+    [InlineData("AAL123 INTC FH220")]
+    [InlineData("AAL123 S170 CA")]
+    [InlineData("AAL123 MM76 CA")]
+    [InlineData("AAL123 CA DV")]
+    [InlineData("AAL123 CA EILS25L")]
+    [InlineData("AAL123 CA CA")]
+    [InlineData("AAL123 EILS25L ERNAV31")]
+    [InlineData("AAL123 EXP CA")]
+    [InlineData("AAL123 CA EXP")]
+    [InlineData("AAL123 S-")]
+    [InlineData("AAL123 S- CA")]
+    [InlineData("AAL123 CA S- S-")]
+    public void Validate_RejectsUnsafeApproachOrdering(string input)
     {
         Assert.Throws<ArgumentException>(
             () => EatsTransmissionValidator.Validate(input));

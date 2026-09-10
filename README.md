@@ -44,6 +44,7 @@ Supported instructions:
 | Fly heading | `DAL123 FH270` |
 | Turn left heading | `DAL123 TLH270` |
 | Turn right heading | `DAL123 TRH270` |
+| Fly present heading | `DAL123 PH` |
 | Climb and maintain | `DAL123 CM230` |
 | Descend and maintain | `DAL123 DM100` |
 | Descend via, optionally naming the assigned STAR | `DAL123 DV` |
@@ -58,6 +59,11 @@ Supported instructions:
 | Maintain Mach, optionally or greater/less | `DAL123 MM76` / `DAL123 MM76+` / `DAL123 MM76-` |
 | Resume normal speed | `DAL123 RNS` |
 | Say indicated speed, Mach, or normal speed/Mach | `DAL123 SI` / `DAL123 SM` / `DAL123 SNS` |
+| Expect an approach | `DAL123 EILS25L` |
+| Fly present heading and intercept final | `DAL123 PH INTC` |
+| Clear the approach currently in the pilot route | `DAL123 CA` |
+| Say approach request | `DAL123 SAR` |
+| Clear the approach and reduce to final approach speed | `DAL123 CA S-` |
 | Descend via and comply with published speeds at a fix | `DAL123 DV CWS@HOMER` |
 | Proceed direct | `DAL123 ..LOZIT` |
 | Cross a fix at an altitude | `DAL123 XOZZZI@120` |
@@ -78,6 +84,10 @@ American thirteen oh seven, report leaving flight level two four zero.
 American thirteen oh seven, descend via, maintain speed two five zero, then comply with speed restrictions at HOMER.
 Delta one two three, maintain Mach point seven six or greater.
 United seven fourteen, resume normal speed, then say indicated speed.
+Delta one two three, expect ILS runway two five left approach.
+Delta one two three, fly heading two two zero, then intercept the final approach course.
+Delta one two three, cleared for the approach.
+Delta one two three, cleared for the approach, then reduce to final approach speed.
 American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
 American thirteen oh seven, Atlanta Center, welcome.
 ```
@@ -210,7 +220,9 @@ The data directory can be changed in the application and is saved locally. The a
 - Descend-via staging requires an unambiguous assigned STAR found in fresh eATS generated-route data and marked with descend-via support in the installed procedure database.
 - Published-speed compliance is limited to a full 2-8 character fix identifier and is staged only with descend via in the same preview; the application does not determine whether that fix has a usable charted speed.
 - The companion cannot determine whether eATS currently has an approach clearance or another simulator state that independently prevents `EXP`; controllers must verify the simulator response.
-- Reduce-to-final-approach-speed (`S-`) is not generated because the companion cannot yet verify the required approach-clearance state.
+- Reduce-to-final-approach-speed (`S-`) is generated only with `CA` earlier in the same preview, so eATS receives the required approach clearance first.
+- `CA` clears the approach already present in the eATS pilot route. Because the token contains no approach identifier, named spoken approach clearances are not inferred and the controller must confirm the expected/current approach in eATS before staging `CA`.
+- `INTC` is accepted only after an explicit heading in the same preview. This intentionally rejects reliance on an earlier heading that the companion cannot verify from snapshot data.
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
 - Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
 - Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
@@ -228,7 +240,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with approach and vector-to-final instructions
+- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with frequency changes and communication responses
 - Support general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases

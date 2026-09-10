@@ -54,6 +54,7 @@ public static partial class EatsTransmissionValidator
 
         ValidateExpediteOrder(instructions);
         ValidateInstructionOrder(instructions);
+        ValidateApproachOrder(instructions);
 
         return normalized;
     }
@@ -61,8 +62,11 @@ public static partial class EatsTransmissionValidator
     private static bool IsAllowedInstruction(string instruction)
     {
         if (instruction is "R" or "DV" or "EXP" or "SA" or
-                "RNS" or "SI" or "SM" or "SNS" ||
+                "RNS" or "SI" or "SM" or "SNS" or
+                "PH" or "INTC" or "CA" or "SAR" or "S-" ||
             DirectPattern().IsMatch(instruction) ||
+            ExpectedApproachPattern().IsMatch(instruction) &&
+                IsValidExpectedApproach(instruction) ||
             AltimeterPattern().IsMatch(instruction) ||
             PublishedSpeedPattern().IsMatch(instruction) ||
             CrossAtPattern().IsMatch(instruction) &&
@@ -151,6 +155,13 @@ public static partial class EatsTransmissionValidator
                 nameof(instructions));
         }
 
+        if (instructions.Contains("CA", StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                "eATS does not accept expedite with an approach clearance.",
+                nameof(instructions));
+        }
+
         if (instructions.Any(instruction =>
                 instruction.StartsWith("PD", StringComparison.Ordinal)))
         {
@@ -176,13 +187,147 @@ public static partial class EatsTransmissionValidator
 
     private static bool IsAltitudeCommand(string instruction)
     {
-        return instruction == "DV" ||
+        return instruction is "DV" or "CA" ||
                instruction.StartsWith("CM", StringComparison.Ordinal) ||
                instruction.StartsWith("DM", StringComparison.Ordinal) ||
                instruction.StartsWith("DVXM", StringComparison.Ordinal) ||
                instruction.StartsWith("PD", StringComparison.Ordinal) ||
                CrossAtPattern().IsMatch(instruction);
     }
+
+    private static bool IsValidExpectedApproach(string instruction)
+    {
+        Match match = ExpectedApproachPattern().Match(instruction);
+
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        try
+        {
+            return instruction == EatsCommandFormatter.ExpectApproach(
+                match.Groups["approach"].Value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateApproachOrder(string[] instructions)
+    {
+        int clearanceCount = instructions.Count(
+            instruction => instruction == "CA");
+        int expectedApproachCount = instructions.Count(
+            instruction => ExpectedApproachPattern().IsMatch(instruction));
+
+        if (clearanceCount > 1 || expectedApproachCount > 1)
+        {
+            throw new ArgumentException(
+                "Only one approach clearance and one expected approach " +
+                "can be staged at a time.",
+                nameof(instructions));
+        }
+
+        int[] approachSpeedIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => item.instruction == "S-")
+            .Select(item => item.index)
+            .ToArray();
+
+        if (approachSpeedIndexes.Length > 1 ||
+            approachSpeedIndexes.Length == 1 &&
+            !instructions
+                .Take(approachSpeedIndexes[0])
+                .Contains("CA", StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                "Reduce to final approach speed requires CA earlier in " +
+                "the same preview.",
+                nameof(instructions));
+        }
+
+        int[] interceptIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => item.instruction == "INTC")
+            .Select(item => item.index)
+            .ToArray();
+
+        if (interceptIndexes.Length > 1)
+        {
+            throw new ArgumentException(
+                "Only one final-approach intercept can be staged at a time.",
+                nameof(instructions));
+        }
+
+        if (interceptIndexes.Length == 1)
+        {
+            int interceptIndex = interceptIndexes[0];
+
+            if (!instructions.Take(interceptIndex).Any(IsHeadingCommand))
+            {
+                throw new ArgumentException(
+                    "Intercept final approach course requires an explicit " +
+                    "heading earlier in the same preview.",
+                    nameof(instructions));
+            }
+
+            int clearanceIndex = Array.IndexOf(instructions, "CA");
+
+            if (clearanceIndex >= 0 && clearanceIndex < interceptIndex)
+            {
+                throw new ArgumentException(
+                    "The approach clearance must follow the final-course " +
+                    "intercept instruction in the same preview.",
+                    nameof(instructions));
+            }
+        }
+
+        int lastClearanceIndex = Array.LastIndexOf(instructions, "CA");
+
+        if (lastClearanceIndex < 0)
+        {
+            return;
+        }
+
+        if (instructions.Take(lastClearanceIndex).Any(IsAssignedSpeedOrMach))
+        {
+            throw new ArgumentException(
+                "An approach clearance must precede an assigned speed or " +
+                "Mach because eATS cancels earlier assignments.",
+                nameof(instructions));
+        }
+
+        if (instructions
+            .Skip(lastClearanceIndex + 1)
+            .Any(instruction => instruction == "DV" ||
+                instruction.StartsWith("DVXM", StringComparison.Ordinal)))
+        {
+            throw new ArgumentException(
+                "A descend-via command after CA cancels the approach " +
+                "clearance in eATS.",
+                nameof(instructions));
+        }
+
+        int expectedApproachIndex = Array.FindIndex(
+            instructions,
+            instruction => ExpectedApproachPattern().IsMatch(instruction));
+
+        if (expectedApproachIndex > lastClearanceIndex)
+        {
+            throw new ArgumentException(
+                "Expect approach must precede CA because it cancels an " +
+                "existing approach clearance.",
+                nameof(instructions));
+        }
+    }
+
+    private static bool IsHeadingCommand(string instruction) =>
+        instruction == "PH" ||
+        instruction.StartsWith("FH", StringComparison.Ordinal) ||
+        instruction.StartsWith("TLH", StringComparison.Ordinal) ||
+        instruction.StartsWith("TRH", StringComparison.Ordinal);
 
     private static bool IsValidCrossAt(string instruction)
     {
@@ -405,6 +550,11 @@ public static partial class EatsTransmissionValidator
         "^CWS@[A-Z0-9]{2,8}$",
         RegexOptions.CultureInvariant)]
     private static partial Regex PublishedSpeedPattern();
+
+    [GeneratedRegex(
+        "^E(?<approach>(?:ILS|RNAV|NDB|VOR|GPS|LDA|LOC|VA)[A-Z0-9]+)$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ExpectedApproachPattern();
 
     [GeneratedRegex(
         "^X(?<fix>[A-Z0-9]{2,8})@(?<altitude>[0-9]{2,3})(?:@(?<speed>[0-9]{3})K)?$",

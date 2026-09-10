@@ -96,6 +96,16 @@ public sealed partial class VoiceCommandParser
             VoiceInstructionType.MaintainSpeed),
 
         new(
+            "expect approach",
+            VoiceInstructionType.ExpectApproach,
+            IsApproachId: true),
+
+        new(
+            "expect",
+            VoiceInstructionType.ExpectApproach,
+            IsApproachId: true),
+
+        new(
             "comply with published speed restrictions at",
             VoiceInstructionType.ComplyWithPublishedSpeeds,
             IsFix: true),
@@ -139,6 +149,15 @@ public sealed partial class VoiceCommandParser
                 "say mach number",
                 "say mach",
                 "resume normal speed",
+                "intercept the final approach course",
+                "intercept final approach course",
+                "cleared for the approach",
+                "cleared for approach",
+                "cleared approach",
+                "fly present heading",
+                "say approach request",
+                "reduce speed to final approach speed",
+                "reduce to final approach speed",
                 "descend via",
                 "expedite",
                 "say altitude",
@@ -464,6 +483,13 @@ public sealed partial class VoiceCommandParser
                 TextValue: ParseFix(value));
         }
 
+        if (pattern.IsApproachId)
+        {
+            return new ParsedVoiceInstruction(
+                pattern.InstructionType,
+                TextValue: ApproachIdNormalizer.Normalize(value));
+        }
+
         if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed)
         {
             VoiceInstructionType type = ParseLimitSuffix(
@@ -558,7 +584,16 @@ public sealed partial class VoiceCommandParser
             ("say airspeed", VoiceInstructionType.SayIndicatedSpeed),
             ("say mach number", VoiceInstructionType.SayMach),
             ("say mach", VoiceInstructionType.SayMach),
-            ("resume normal speed", VoiceInstructionType.ResumeNormalSpeed)
+            ("resume normal speed", VoiceInstructionType.ResumeNormalSpeed),
+            ("intercept the final approach course", VoiceInstructionType.InterceptFinalApproachCourse),
+            ("intercept final approach course", VoiceInstructionType.InterceptFinalApproachCourse),
+            ("cleared for the approach", VoiceInstructionType.ClearedApproach),
+            ("cleared for approach", VoiceInstructionType.ClearedApproach),
+            ("cleared approach", VoiceInstructionType.ClearedApproach),
+            ("fly present heading", VoiceInstructionType.FlyPresentHeading),
+            ("say approach request", VoiceInstructionType.SayApproachRequest),
+            ("reduce speed to final approach speed", VoiceInstructionType.ReduceToFinalApproachSpeed),
+            ("reduce to final approach speed", VoiceInstructionType.ReduceToFinalApproachSpeed)
         ];
 
         foreach (var pattern in patterns)
@@ -875,7 +910,8 @@ public sealed partial class VoiceCommandParser
         VoiceInstructionType InstructionType,
         bool IsFlightLevel = false,
         bool IsAltitude = false,
-        bool IsFix = false);
+        bool IsFix = false,
+        bool IsApproachId = false);
 
     [GeneratedRegex(
         "^(?:the )?(?<star>[a-z0-9]+(?: [a-z0-9]+)?) " +
