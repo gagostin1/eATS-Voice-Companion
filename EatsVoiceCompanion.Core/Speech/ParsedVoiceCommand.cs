@@ -177,6 +177,19 @@ public sealed record ParsedVoiceCommand
             VoiceInstructionType.ReduceToFinalApproachSpeed =>
                 EatsCommandFormatter.ReduceToFinalApproachSpeed(),
 
+            VoiceInstructionType.ContactFrequency =>
+                EatsCommandFormatter.ContactFrequency(
+                    RequireTextValue(instruction)),
+
+            VoiceInstructionType.RemainThisFrequency =>
+                EatsCommandFormatter.RemainThisFrequency(),
+
+            VoiceInstructionType.SayAgain =>
+                EatsCommandFormatter.SayAgain(),
+
+            VoiceInstructionType.StandBy =>
+                EatsCommandFormatter.StandBy(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(
                     RequireTextValue(instruction)),

@@ -24,6 +24,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Pilot's-discretion descent, expedite-current, expedite-through/to-altitude, report-leaving/reaching-altitude, and say-altitude commands with speech, editor, allowlist, ordering, and scenario-matrix coverage
 - Assigned speed and Mach exact/greater/less commands, resume-normal-speed, and indicated-speed/Mach report commands with speech, editor, allowlist, and scenario-matrix coverage
 - Fly-present-heading, expect-approach, intercept-final, cleared-approach, final-approach-speed, and say-approach-request commands with approach-ID normalization, conservative ordering rules, editor support, and scenario-matrix coverage
+- Civil VHF contact-frequency, remain-this-frequency, say-again, and stand-by commands with FAA digit parsing, canonical eATS frequency abbreviation, conservative ordering, editor support, and scenario-matrix coverage
 
 ### Fixed
 
@@ -33,7 +34,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 ### Planned
 
 - General-aviation callsign phraseology
-- Additional route, communication, holding, transponder, and initial-clearance commands
+- Additional route, holding, transponder, and initial-clearance commands
 
 ## [0.1.0] - 2026-09-06
 

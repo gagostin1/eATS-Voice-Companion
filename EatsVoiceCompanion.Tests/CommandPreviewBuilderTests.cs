@@ -95,6 +95,10 @@ public sealed class CommandPreviewBuilderTests
     [InlineData(VoiceInstructionType.ClearedApproach, "", "DAL123 CA")]
     [InlineData(VoiceInstructionType.SayApproachRequest, "", "DAL123 SAR")]
     [InlineData(VoiceInstructionType.ReduceToFinalApproachSpeed, "", "DAL123 CA S-")]
+    [InlineData(VoiceInstructionType.ContactFrequency, "132.37", "DAL123 *3237")]
+    [InlineData(VoiceInstructionType.RemainThisFrequency, "", "DAL123 *0")]
+    [InlineData(VoiceInstructionType.SayAgain, "", "DAL123 ?")]
+    [InlineData(VoiceInstructionType.StandBy, "", "DAL123 SBY")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,

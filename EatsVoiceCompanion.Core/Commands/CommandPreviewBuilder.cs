@@ -114,6 +114,18 @@ public static class CommandPreviewBuilder
             VoiceInstructionType.ReduceToFinalApproachSpeed =>
                 EatsCommandFormatter.ReduceToFinalApproachSpeed(),
 
+            VoiceInstructionType.ContactFrequency =>
+                EatsCommandFormatter.ContactFrequency(value!),
+
+            VoiceInstructionType.RemainThisFrequency =>
+                EatsCommandFormatter.RemainThisFrequency(),
+
+            VoiceInstructionType.SayAgain =>
+                EatsCommandFormatter.SayAgain(),
+
+            VoiceInstructionType.StandBy =>
+                EatsCommandFormatter.StandBy(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(value!),
 

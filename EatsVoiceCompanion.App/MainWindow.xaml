@@ -324,6 +324,14 @@
                                       Tag="SayApproachRequest"/>
                         <ComboBoxItem Content="Cleared approach; reduce to final approach speed"
                                       Tag="ApproachSpeed"/>
+                        <ComboBoxItem Content="Contact frequency"
+                                      Tag="ContactFrequency"/>
+                        <ComboBoxItem Content="Remain this frequency"
+                                      Tag="RemainFrequency"/>
+                        <ComboBoxItem Content="Say again"
+                                      Tag="SayAgain"/>
+                        <ComboBoxItem Content="Stand by"
+                                      Tag="StandBy"/>
                         <ComboBoxItem Content="Descend via; comply with published speeds at fix"
                                       Tag="PublishedSpeed"/>
                         <ComboBoxItem Content="Proceed direct"

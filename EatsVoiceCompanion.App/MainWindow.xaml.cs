@@ -412,6 +412,10 @@ public partial class MainWindow : Window
             "ClearedApproach" => VoiceInstructionType.ClearedApproach,
             "SayApproachRequest" => VoiceInstructionType.SayApproachRequest,
             "ApproachSpeed" => VoiceInstructionType.ReduceToFinalApproachSpeed,
+            "ContactFrequency" => VoiceInstructionType.ContactFrequency,
+            "RemainFrequency" => VoiceInstructionType.RemainThisFrequency,
+            "SayAgain" => VoiceInstructionType.SayAgain,
+            "StandBy" => VoiceInstructionType.StandBy,
             "PublishedSpeed" =>
                 VoiceInstructionType.ComplyWithPublishedSpeeds,
             "Direct" => VoiceInstructionType.ProceedDirect,
@@ -1009,6 +1013,10 @@ public partial class MainWindow : Window
                 "SayApproachRequest",
             VoiceInstructionType.ReduceToFinalApproachSpeed =>
                 "ApproachSpeed",
+            VoiceInstructionType.ContactFrequency => "ContactFrequency",
+            VoiceInstructionType.RemainThisFrequency => "RemainFrequency",
+            VoiceInstructionType.SayAgain => "SayAgain",
+            VoiceInstructionType.StandBy => "StandBy",
             VoiceInstructionType.ComplyWithPublishedSpeeds => "PublishedSpeed",
             VoiceInstructionType.ProceedDirect => "Direct",
             VoiceInstructionType.CrossAtAltitude => "CrossAltitude",
@@ -1034,6 +1042,8 @@ public partial class MainWindow : Window
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 instruction.TextValue ?? string.Empty,
             VoiceInstructionType.ExpectApproach =>
+                instruction.TextValue ?? string.Empty,
+            VoiceInstructionType.ContactFrequency =>
                 instruction.TextValue ?? string.Empty,
             _ => instruction.NumericValue?.ToString() ?? string.Empty
         };

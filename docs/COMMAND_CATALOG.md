@@ -33,6 +33,10 @@ contains only the compatibility facts needed by the original companion code.
 | Cleared for the approach currently in the pilot route | `CA` | none |
 | Say approach request | `SAR` | none |
 | Cleared for the approach, reduce to final approach speed | `CA S-` | none |
+| Contact Jacksonville Center, 132.37 | `*3237` | `132.37` |
+| Remain this frequency | `*0` | none |
+| Say again | `?` | none |
+| Stand by | `SBY` | none |
 | Descend via, comply with speed restrictions at HOMER | `DV CWS@HOMER` | `HOMER` |
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
@@ -89,6 +93,18 @@ allowlisted token sequence can be corrected and rebuilt.
 - `INTC` acts on an assigned heading. Since the companion cannot prove a heading
   retained from an earlier transmission, it requires `FH`, `TLH`, `TRH`, or `PH`
   earlier in the same preview. If `CA` is included, it must follow `INTC`.
+- Contact frequencies use the canonical eATS abbreviation that omits the
+  leading `1`: 118.0 becomes `*180`, 132.37 becomes `*3237`, and 135.275 is
+  spoken and emitted as `*3527`. Only civil VHF frequencies from 118.000 through
+  136.975 MHz with documented 25 kHz channel endings are accepted.
+- FAA-style frequency speech uses separate digits and “point.” A facility name
+  may appear between “contact” and the frequency, but it is not encoded in the
+  eATS token.
+- A contact or remain-this-frequency token must be last, and only one frequency
+  instruction is accepted per preview. `?` and `SBY` must be staged alone.
+- `*T` contact tower, `**` advisory frequency, and `*O` oceanic communications
+  remain deferred until their facility/approach prerequisites can be evaluated.
+  `??` is also deferred because it clears the aircraft communication buffer.
 - `DV` or `DVXM` must precede an assigned speed or Mach in the same transmission
   because eATS cancels assignments that appear before descend via.
 - Published-speed compliance emits canonical `CWS@<fix>` output. The supplied
@@ -128,10 +144,9 @@ allowlisted token sequence can be corrected and rebuilt.
 
 The remaining reference will be implemented in focused, testable groups:
 
-1. Frequency changes and communication responses.
-2. Holding instructions and options.
-3. Transponder commands.
-4. Initial-clearance and release commands.
+1. Holding instructions and options.
+2. Transponder commands.
+3. Initial-clearance and release commands.
 
 Each group must include formatter tests, whole-transmission allowlist tests,
 spoken-parser tests, conflict/order tests, and manual eATS verification before

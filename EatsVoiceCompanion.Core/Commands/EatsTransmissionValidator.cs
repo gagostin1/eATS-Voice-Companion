@@ -55,6 +55,7 @@ public static partial class EatsTransmissionValidator
         ValidateExpediteOrder(instructions);
         ValidateInstructionOrder(instructions);
         ValidateApproachOrder(instructions);
+        ValidateCommunicationOrder(instructions);
 
         return normalized;
     }
@@ -63,8 +64,11 @@ public static partial class EatsTransmissionValidator
     {
         if (instruction is "R" or "DV" or "EXP" or "SA" or
                 "RNS" or "SI" or "SM" or "SNS" or
-                "PH" or "INTC" or "CA" or "SAR" or "S-" ||
+                "PH" or "INTC" or "CA" or "SAR" or "S-" or
+                "*0" or "?" or "SBY" ||
             DirectPattern().IsMatch(instruction) ||
+            ContactFrequencyPattern().IsMatch(instruction) &&
+                IsValidContactFrequency(instruction) ||
             ExpectedApproachPattern().IsMatch(instruction) &&
                 IsValidExpectedApproach(instruction) ||
             AltimeterPattern().IsMatch(instruction) ||
@@ -212,6 +216,64 @@ public static partial class EatsTransmissionValidator
         catch (ArgumentException)
         {
             return false;
+        }
+    }
+
+    private static bool IsValidContactFrequency(string instruction)
+    {
+        Match match = ContactFrequencyPattern().Match(instruction);
+
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        string abbreviated = match.Groups["frequency"].Value;
+        string fullDigits = "1" + abbreviated;
+        string frequency = fullDigits[..3] + "." + fullDigits[3..];
+
+        try
+        {
+            return instruction ==
+                   EatsCommandFormatter.ContactFrequency(frequency);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateCommunicationOrder(string[] instructions)
+    {
+        int[] frequencyIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => item.instruction == "*0" ||
+                ContactFrequencyPattern().IsMatch(item.instruction))
+            .Select(item => item.index)
+            .ToArray();
+
+        if (frequencyIndexes.Length > 1)
+        {
+            throw new ArgumentException(
+                "Only one frequency instruction can be staged at a time.",
+                nameof(instructions));
+        }
+
+        if (frequencyIndexes.Length == 1 &&
+            frequencyIndexes[0] != instructions.Length - 1)
+        {
+            throw new ArgumentException(
+                "A frequency instruction must be the final token in the " +
+                "preview.",
+                nameof(instructions));
+        }
+
+        if (instructions.Length > 1 &&
+            instructions.Any(instruction => instruction is "?" or "SBY"))
+        {
+            throw new ArgumentException(
+                "Say-again and stand-by responses must be staged alone.",
+                nameof(instructions));
         }
     }
 
@@ -532,7 +594,7 @@ public static partial class EatsTransmissionValidator
         }
     }
 
-    [GeneratedRegex("\\A[A-Z0-9.@+\\- ]+\\z", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("\\A[A-Z0-9.@+*?\\- ]+\\z", RegexOptions.CultureInvariant)]
     private static partial Regex AllowedCharactersPattern();
 
     [GeneratedRegex("^[A-Z0-9]{2,7}$", RegexOptions.CultureInvariant)]
@@ -555,6 +617,11 @@ public static partial class EatsTransmissionValidator
         "^E(?<approach>(?:ILS|RNAV|NDB|VOR|GPS|LDA|LOC|VA)[A-Z0-9]+)$",
         RegexOptions.CultureInvariant)]
     private static partial Regex ExpectedApproachPattern();
+
+    [GeneratedRegex(
+        "^\\*(?<frequency>[0-9]{3,4})$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ContactFrequencyPattern();
 
     [GeneratedRegex(
         "^X(?<fix>[A-Z0-9]{2,8})@(?<altitude>[0-9]{2,3})(?:@(?<speed>[0-9]{3})K)?$",

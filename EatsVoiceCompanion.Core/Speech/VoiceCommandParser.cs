@@ -106,6 +106,16 @@ public sealed partial class VoiceCommandParser
             IsApproachId: true),
 
         new(
+            "contact frequency",
+            VoiceInstructionType.ContactFrequency,
+            IsFrequency: true),
+
+        new(
+            "contact",
+            VoiceInstructionType.ContactFrequency,
+            IsFrequency: true),
+
+        new(
             "comply with published speed restrictions at",
             VoiceInstructionType.ComplyWithPublishedSpeeds,
             IsFix: true),
@@ -158,6 +168,10 @@ public sealed partial class VoiceCommandParser
                 "say approach request",
                 "reduce speed to final approach speed",
                 "reduce to final approach speed",
+                "remain this frequency",
+                "say again",
+                "stand by",
+                "standby",
                 "descend via",
                 "expedite",
                 "say altitude",
@@ -490,6 +504,16 @@ public sealed partial class VoiceCommandParser
                 TextValue: ApproachIdNormalizer.Normalize(value));
         }
 
+        if (pattern.IsFrequency)
+        {
+            string frequency = ExtractFrequencyText(value);
+            AviationFrequencyParser.ParseHundredths(frequency);
+
+            return new ParsedVoiceInstruction(
+                pattern.InstructionType,
+                TextValue: frequency);
+        }
+
         if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed)
         {
             VoiceInstructionType type = ParseLimitSuffix(
@@ -570,6 +594,31 @@ public sealed partial class VoiceCommandParser
         return exact;
     }
 
+    private static string ExtractFrequencyText(string value)
+    {
+        int onIndex = value.LastIndexOf(" on ", StringComparison.Ordinal);
+
+        if (onIndex >= 0)
+        {
+            return value[(onIndex + " on ".Length)..].Trim();
+        }
+
+        string[] tokens = value.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+        int firstDigit = Array.FindIndex(
+            tokens,
+            AviationFrequencyParser.IsDigitToken);
+
+        if (firstDigit < 0)
+        {
+            throw new InvalidOperationException(
+                "A contact instruction requires a spoken frequency.");
+        }
+
+        return string.Join(' ', tokens.Skip(firstDigit));
+    }
+
     private static bool TryParseNoValueInstruction(
         string remaining,
         out ParsedVoiceInstruction instruction,
@@ -593,7 +642,11 @@ public sealed partial class VoiceCommandParser
             ("fly present heading", VoiceInstructionType.FlyPresentHeading),
             ("say approach request", VoiceInstructionType.SayApproachRequest),
             ("reduce speed to final approach speed", VoiceInstructionType.ReduceToFinalApproachSpeed),
-            ("reduce to final approach speed", VoiceInstructionType.ReduceToFinalApproachSpeed)
+            ("reduce to final approach speed", VoiceInstructionType.ReduceToFinalApproachSpeed),
+            ("remain this frequency", VoiceInstructionType.RemainThisFrequency),
+            ("say again", VoiceInstructionType.SayAgain),
+            ("stand by", VoiceInstructionType.StandBy),
+            ("standby", VoiceInstructionType.StandBy)
         ];
 
         foreach (var pattern in patterns)
@@ -911,7 +964,8 @@ public sealed partial class VoiceCommandParser
         bool IsFlightLevel = false,
         bool IsAltitude = false,
         bool IsFix = false,
-        bool IsApproachId = false);
+        bool IsApproachId = false,
+        bool IsFrequency = false);
 
     [GeneratedRegex(
         "^(?:the )?(?<star>[a-z0-9]+(?: [a-z0-9]+)?) " +

@@ -51,6 +51,12 @@ public static partial class VoiceTranscriptRecovery
         "say approach request",
         "reduce speed to final approach speed",
         "reduce to final approach speed",
+        "contact frequency",
+        "remain this frequency",
+        "say again",
+        "stand by",
+        "standby",
+        "contact",
         "expect approach",
         "expect",
         "expedite",
@@ -115,6 +121,15 @@ public static partial class VoiceTranscriptRecovery
         string remainder = string.Join(
             ' ',
             tokens[(instruction.StartIndex + instruction.TokenCount)..]);
+
+        if (instruction.Phrase is "contact" or "contact frequency" &&
+            !remainder
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Any(AviationFrequencyParser.IsDigitToken))
+        {
+            return null;
+        }
+
         remainder = CorrectFlightLevelRemainder(
             instruction.Phrase,
             remainder);

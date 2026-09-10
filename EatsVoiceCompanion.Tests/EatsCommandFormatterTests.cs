@@ -198,6 +198,28 @@ public sealed class EatsCommandFormatterTests
             EatsCommandFormatter.ReduceToFinalApproachSpeed());
     }
 
+    [Theory]
+    [InlineData("118.0", "*180")]
+    [InlineData("121.5", "*215")]
+    [InlineData("132.37", "*3237")]
+    [InlineData("135.275", "*3527")]
+    public void ContactFrequency_UsesCanonicalAbbreviatedEatsSyntax(
+        string frequency,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            EatsCommandFormatter.ContactFrequency(frequency));
+    }
+
+    [Fact]
+    public void CommunicationResponses_UseDocumentedEatsSyntax()
+    {
+        Assert.Equal("*0", EatsCommandFormatter.RemainThisFrequency());
+        Assert.Equal("?", EatsCommandFormatter.SayAgain());
+        Assert.Equal("SBY", EatsCommandFormatter.StandBy());
+    }
+
     [Fact]
     public void PartialHundredsAltitude_IsRejected()
     {

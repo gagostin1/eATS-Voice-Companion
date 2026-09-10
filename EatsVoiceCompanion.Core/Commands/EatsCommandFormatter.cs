@@ -154,6 +154,22 @@ public static class EatsCommandFormatter
 
     public static string ReduceToFinalApproachSpeed() => "S-";
 
+    public static string ContactFrequency(string frequency)
+    {
+        int hundredths = AviationFrequencyParser.ParseHundredths(frequency);
+        string digits = hundredths.ToString("D5");
+        string fraction = digits[3..].TrimEnd('0');
+        string full = digits[..3] + (fraction.Length == 0 ? "0" : fraction);
+
+        return "*" + full[1..];
+    }
+
+    public static string RemainThisFrequency() => "*0";
+
+    public static string SayAgain() => "?";
+
+    public static string StandBy() => "SBY";
+
     private static void ValidateSpeed(int speedKnots)
     {
         if (speedKnots is < 100 or > 350)

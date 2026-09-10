@@ -73,6 +73,16 @@ public sealed class VoiceCommandParserTests
         "Delta 9 cleared for the approach then reduce speed to final approach speed",
         "DAL9 CA S-")]
     [InlineData(
+        "Delta 9 contact Jacksonville Center on one three two point three seven",
+        "DAL9 *3237")]
+    [InlineData("Delta 9 contact frequency 118.0", "DAL9 *180")]
+    [InlineData("Delta 9 remain this frequency", "DAL9 *0")]
+    [InlineData("Delta 9 say again", "DAL9 ?")]
+    [InlineData("Delta 9 stand by", "DAL9 SBY")]
+    [InlineData(
+        "Delta 9 descend and maintain one two thousand then contact Memphis Center one three five point two seven",
+        "DAL9 DM120 *3527")]
+    [InlineData(
         "Delta 123 proceed direct to LOZIT",
         "DAL123 ..LOZIT")]
     [InlineData(
