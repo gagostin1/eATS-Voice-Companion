@@ -150,6 +150,113 @@ public sealed class VoiceCommandInterpreterTests
         }
     }
 
+    public static IEnumerable<object[]> GeneralAviationScenarioCases()
+    {
+        (string Spoken, string Callsign)[] registrations =
+        [
+            ("November two five three papa zulu", "N253PZ"),
+            ("November six eight three niner romeo", "N6839R"),
+            ("November five seven seven kilo charlie", "N577KC"),
+            ("November six three one sierra foxtrot", "N631SF"),
+            ("November three five zero papa charlie", "N350PC"),
+            ("November one niner three papa papa", "N193PP")
+        ];
+        (string Phrase, string Token)[] instructions =
+        [
+            ("fly heading two seven zero", "FH270"),
+            ("climb and maintain flight level two three zero", "CM230"),
+            ("descend and maintain one two thousand", "DM120"),
+            ("maintain speed two five zero", "S250"),
+            ("proceed direct OZZZI", "..OZZZI"),
+            ("contact Atlanta Center one two five point one", "*251"),
+            ("say altitude", "SA"),
+            ("roger", "R")
+        ];
+
+        foreach ((string spoken, string callsign) in registrations)
+        {
+            foreach ((string phrase, string token) in instructions)
+            {
+                yield return
+                [
+                    $"{spoken}, Atlanta Center, {phrase}",
+                    callsign,
+                    $"{callsign} {token}"
+                ];
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(GeneralAviationScenarioCases))]
+    public void Interpret_HandlesGeneralAviationScenarioMatrix(
+        string transcript,
+        string callsign,
+        string expectedCommand)
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                transcript,
+                "Atlanta Center",
+                new HashSet<string>(
+                    [callsign, "N999AB", "DAL123"],
+                    StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>());
+
+        Assert.Equal(expectedCommand, result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.Strict, result.Kind);
+    }
+
+    [Fact]
+    public void Interpret_ResolvesUniqueAbbreviatedNNumberFromSnapshot()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "November three niner romeo fly heading two seven zero",
+                null,
+                new HashSet<string>(
+                    ["N6839R", "N253PZ"],
+                    StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>());
+
+        Assert.Equal("N6839R FH270", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.Recovered, result.Kind);
+    }
+
+    [Fact]
+    public void Interpret_RejectsAmbiguousAbbreviatedNNumber()
+    {
+        VoiceInterpretationException exception = Assert.Throws<
+            VoiceInterpretationException>(
+                () => new VoiceCommandInterpreter(Aliases).Interpret(
+                    "November three niner romeo fly heading two seven zero",
+                    null,
+                    new HashSet<string>(
+                        ["N6839R", "N1239R"],
+                        StringComparer.OrdinalIgnoreCase),
+                    new Dictionary<string, string>()));
+
+        Assert.Equal(
+            new[] { "N6839R", "N1239R" },
+            exception.CandidateCallsigns);
+    }
+
+    [Fact]
+    public void Interpret_PrefersExactActiveShortNNumber()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "November three niner romeo fly heading two seven zero",
+                null,
+                new HashSet<string>(
+                    ["N39R", "N6839R"],
+                    StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>());
+
+        Assert.Equal("N39R FH270", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.Strict, result.Kind);
+    }
+
     [Theory]
     [MemberData(nameof(StrictScenarioCases))]
     public void Interpret_HandlesGeneratedScenarioMatrix(

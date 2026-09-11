@@ -185,6 +185,56 @@ public sealed class VoiceTranscriptRecoveryTests
 
     [Theory]
     [InlineData(
+        "November six eight three niner Romeo Atlanta Center " +
+        "climate maintain flight level two three zero",
+        "N6839R CM230")]
+    [InlineData(
+        "November three niner Romeo Atlanta Center " +
+        "fly heading two seven zero",
+        "N6839R FH270")]
+    public void TryRecover_UsesActiveNNumber(
+        string transcript,
+        string expectedCommand)
+    {
+        VoiceTranscriptRecoveryResult? result =
+            VoiceTranscriptRecovery.TryRecover(
+                transcript,
+                ["N6839R", "DAL123"],
+                Aliases,
+                new Dictionary<string, string>());
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            expectedCommand,
+            new VoiceCommandParser(Aliases)
+                .Parse(result.RecoveredTranscript)
+                .ToEatsCommand());
+    }
+
+    [Fact]
+    public void TryRecover_RejectsAmbiguousAbbreviatedNNumber()
+    {
+        const string transcript =
+            "November three niner Romeo fly heading two seven zero";
+
+        VoiceTranscriptRecoveryResult? result =
+            VoiceTranscriptRecovery.TryRecover(
+                transcript,
+                ["N6839R", "N1239R"],
+                Aliases,
+                new Dictionary<string, string>());
+        IReadOnlyList<string> suggestions =
+            VoiceTranscriptRecovery.SuggestCallsigns(
+                transcript,
+                ["N6839R", "N1239R"],
+                Aliases);
+
+        Assert.Null(result);
+        Assert.Equal(new[] { "N6839R", "N1239R" }, suggestions);
+    }
+
+    [Theory]
+    [InlineData(
         "Delter 123 descend at pilots discrecion maintain one two thousand",
         "DAL123 PD120")]
     [InlineData(

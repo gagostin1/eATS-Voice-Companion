@@ -31,13 +31,13 @@ public sealed class ActiveCallsignPromptBuilderTests
                 AirlineAliases);
 
         Assert.Equal(
-            "Active airline callsigns: " +
+            "Active aircraft callsigns: " +
             "Delta 1380. UPS 1076. Piedmont 5910.",
             result);
     }
 
     [Fact]
-    public void Build_IgnoresUnsupportedCallsigns()
+    public void Build_IncludesNNumberCallsignsAndIgnoresUnsupportedValues()
     {
         string[] activeCallsigns =
         {
@@ -52,7 +52,10 @@ public sealed class ActiveCallsignPromptBuilderTests
                 activeCallsigns,
                 AirlineAliases);
 
-        Assert.Equal(string.Empty, result);
+        Assert.Equal(
+            "Active aircraft callsigns: " +
+            "November Four One Eight Golf Juliett.",
+            result);
     }
 
     [Fact]
@@ -71,7 +74,7 @@ public sealed class ActiveCallsignPromptBuilderTests
                 aliases);
 
         Assert.Equal(
-            "Active airline callsigns: American 1256.",
+            "Active aircraft callsigns: American 1256.",
             result);
     }
 
@@ -90,7 +93,7 @@ public sealed class ActiveCallsignPromptBuilderTests
                 AirlineAliases);
 
         Assert.Equal(
-            "Active airline callsigns: Delta 1380.",
+            "Active aircraft callsigns: Delta 1380.",
             result);
     }
 
@@ -111,7 +114,7 @@ public sealed class ActiveCallsignPromptBuilderTests
                 maximumCallsigns: 2);
 
         Assert.Equal(
-            "Active airline callsigns: Delta 1. Delta 2.",
+            "Active aircraft callsigns: Delta 1. Delta 2.",
             result);
     }
 

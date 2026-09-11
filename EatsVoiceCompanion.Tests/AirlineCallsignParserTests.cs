@@ -31,6 +31,8 @@ public sealed class AirlineCallsignParserTests
     [InlineData("United seven fourteen", "UAL714")]
     [InlineData("American five twenty one", "AAL521")]
     [InlineData("Delta zero one zero", "DAL010")]
+    [InlineData("November two five three papa zulu", "N253PZ")]
+    [InlineData("N6839R", "N6839R")]
     public void Parse_ReturnsExpectedCallsign(
         string input,
         string expected)

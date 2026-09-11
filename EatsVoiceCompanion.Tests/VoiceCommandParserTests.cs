@@ -103,6 +103,12 @@ public sealed class VoiceCommandParserTests
     [InlineData(
         "Blue Streak 5596 descend via",
         "JIA5596 DV")]
+    [InlineData(
+        "November two five three papa zulu fly heading two seven zero",
+        "N253PZ FH270")]
+    [InlineData(
+        "N6839R descend and maintain one two thousand",
+        "N6839R DM120")]
     public void Parse_BuildsExpectedEatsCommand(
         string transcript,
         string expected)

@@ -16,11 +16,12 @@ The current workflow records a controller transmission, transcribes it locally w
 - Discovers Windows recording devices and records hold-to-talk audio as 16 kHz, 16-bit, mono WAV files
 - Downloads the higher-accuracy Whisper `small.en` model on first use and performs local speech recognition with beam-search decoding
 - Loads airline telephony names and designators from the user's installed eATS `Airlines.txt`
+- Recognizes full U.S. registration callsigns such as `N253PZ` from compact text or `November two five three papa zulu`
 - Reads active aircraft from eATS `SnapshotAuto.txt` without modifying it
 - Resolves descend-via-capable assigned STARs from eATS `LogDetail.txt` and `Airways.txt`
 - Supports published-speed compliance at a named fix while descending via, with simulator-safe command ordering
 - Supports pilot's-discretion descent, expedite, report-leaving/reaching, and say-altitude instructions
-- Adds active airline callsigns to the speech-recognition prompt to improve callsign recognition
+- Adds active airline and N-number callsigns to the speech-recognition prompt to improve callsign recognition
 - Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, and assigned STAR context
 - Lets the controller correct an imperfect transcript and interpret it again without making another recording
 - Reports likely active callsigns when a fuzzy callsign remains ambiguous instead of choosing one silently
@@ -97,6 +98,8 @@ Delta one two three, remain this frequency.
 Delta one two three, say again.
 American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
 American thirteen oh seven, Atlanta Center, welcome.
+November two five three papa zulu, Atlanta Center, fly heading two seven zero.
+November three papa zulu, Atlanta Center, say altitude.
 ```
 
 See the [command catalog](docs/COMMAND_CATALOG.md) for manual value formats,
@@ -115,6 +118,8 @@ Snapshot and route context are loaded at startup and refreshed before transcript
 Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them. Assigned speed and Mach commands use the documented ranges and exact/greater/less suffixes. Published-speed compliance uses the canonical `CWS@FIX` token, must follow `DV` or `DVXM` in the same preview, and must be reissued after a later direct or descend-via command. Expedite is rejected alongside descend via or pilot's-discretion descent, and it must follow the final altitude command because a later altitude assignment cancels it in eATS.
 
 If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected; when useful, the error lists likely active callsigns for the controller to compare. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. The transcript itself can also be corrected and submitted with **Interpret again** without rerecording. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
+
+Full N-numbers follow FAA registration structure and are spoken as `November` followed by individual digits and phonetic letters. The companion also accepts `November` plus the final three registration characters only when exactly one active N-number in the current snapshot has that suffix. A missing or ambiguous match remains fail-closed and is never silently selected.
 
 The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
@@ -163,8 +168,8 @@ dotnet test
 
 The test suite includes a generated voice-interpretation matrix that exercises
 the same interpreter used by the application across multiple airline
-telephony names, flight-number shapes, controller positions, assigned STARs,
-strict command families, and constrained-recovery cases. This keeps recognition
+telephony names, N-number shapes, flight-number shapes, controller positions,
+assigned STARs, strict command families, and constrained-recovery cases. This keeps recognition
 coverage independent of any one eATS scenario. Microphone transcription and
 foreground staging still require the manual checks described below.
 
@@ -222,7 +227,7 @@ The data directory can be changed in the application and is saved locally. The a
 
 ## Known limitations
 
-- The application supports airline callsigns but does not yet parse spoken general-aviation registration callsigns such as N-numbers.
+- Aircraft-type registration callsigns such as `Cessna Three Papa Zulu` are not yet resolved because the active snapshot context currently contains callsigns but not a trusted aircraft-type-to-callsign mapping. Use `November Three Papa Zulu` for a uniquely active abbreviated N-number.
 - Named STAR runway transitions are not yet parsed; say only the base procedure name and number, such as `BANKR Five arrival`.
 - Descend-via staging requires an unambiguous assigned STAR found in fresh eATS generated-route data and marked with descend-via support in the installed procedure database.
 - Published-speed compliance is limited to a full 2-8 character fix identifier and is staged only with descend via in the same preview; the application does not determine whether that fix has a usable charted speed.
@@ -251,7 +256,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 ## Development roadmap
 
 - Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with holding instructions and options
-- Support general-aviation callsign phraseology
+- Support aircraft-type-based general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases
 

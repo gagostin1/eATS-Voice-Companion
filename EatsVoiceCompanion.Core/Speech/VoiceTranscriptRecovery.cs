@@ -259,6 +259,8 @@ public static partial class VoiceTranscriptRecovery
 
         List<CallsignMatch> matches = new();
 
+        AddNNumberMatches(tokens, activeCallsigns, matches);
+
         foreach (string rawCallsign in activeCallsigns)
         {
             string callsign = rawCallsign.Trim().ToUpperInvariant();
@@ -352,6 +354,57 @@ public static partial class VoiceTranscriptRecovery
         }
 
         return ranked[0];
+    }
+
+    private static void AddNNumberMatches(
+        string[] tokens,
+        IEnumerable<string> activeCallsigns,
+        ICollection<CallsignMatch> matches)
+    {
+        string? spokenRegistration = null;
+
+        for (int end = 1; end <= Math.Min(tokens.Length, 7); end++)
+        {
+            if (NNumberCallsignParser.TryParse(
+                    string.Join(' ', tokens[..end]),
+                    out string parsed))
+            {
+                spokenRegistration = parsed;
+            }
+        }
+
+        if (spokenRegistration is null)
+        {
+            return;
+        }
+
+        bool mayBeAbbreviated = spokenRegistration.Length == 4;
+        string suffix = spokenRegistration[1..];
+
+        foreach (string rawCallsign in activeCallsigns)
+        {
+            string active = rawCallsign.Trim().ToUpperInvariant();
+
+            if (!NNumberCallsignParser.IsValid(active))
+            {
+                continue;
+            }
+
+            bool exact = string.Equals(
+                active,
+                spokenRegistration,
+                StringComparison.OrdinalIgnoreCase);
+            bool suffixMatch = mayBeAbbreviated &&
+                active.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+
+            if (exact || suffixMatch)
+            {
+                matches.Add(new CallsignMatch(
+                    active,
+                    Score: 1.0,
+                    ExactNumber: true));
+            }
+        }
     }
 
     private static (string Remainder, bool Corrected) CorrectNamedStar(

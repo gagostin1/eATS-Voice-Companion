@@ -51,6 +51,13 @@ public sealed class AirlineCallsignParser
             normalized.Replace(" ", string.Empty)
                 .ToUpperInvariant();
 
+        if (NNumberCallsignParser.TryParse(
+                spokenCallsign,
+                out string nNumber))
+        {
+            return nNumber;
+        }
+
         if (CompactCallsignPattern.IsMatch(compact))
         {
             return compact;

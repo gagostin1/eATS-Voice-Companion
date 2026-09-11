@@ -93,7 +93,7 @@ public sealed class RecognitionContextService
                     (activeStars, _) = LoadRouteContext(activeCallsigns);
                 }
 
-                string staleAirlineContext =
+                string staleCallsignContext =
                     ActiveCallsignPromptBuilder.Build(
                         activeCallsigns,
                         _airlineAliases);
@@ -101,7 +101,7 @@ public sealed class RecognitionContextService
                     activeStars.Values);
 
                 return Result(
-                    ($"{positionContext} {staleAirlineContext} " +
+                    ($"{positionContext} {staleCallsignContext} " +
                      staleStarPrompt).Trim(),
                     $"The eATS snapshot is stale " +
                     $"({snapshotAge.TotalMinutes:F1} minutes old). " +
@@ -131,16 +131,16 @@ public sealed class RecognitionContextService
                     activeCallsigns);
             }
 
-            string airlineContext = ActiveCallsignPromptBuilder.Build(
+            string callsignContext = ActiveCallsignPromptBuilder.Build(
                 activeCallsigns,
                 _airlineAliases);
 
-            if (string.IsNullOrWhiteSpace(airlineContext))
+            if (string.IsNullOrWhiteSpace(callsignContext))
             {
                 return Result(
                     positionContext,
                     $"Found {activeCallsigns.Count} active aircraft, " +
-                    "but none had supported airline callsigns.",
+                    "but none had supported callsigns.",
                     hasFreshSnapshot: true,
                     activeCallsigns,
                     activeStars);
@@ -149,10 +149,10 @@ public sealed class RecognitionContextService
             string starPrompt = BuildStarPrompt(activeStars.Values);
 
             return Result(
-                $"{positionContext} {airlineContext} {starPrompt}".Trim(),
+                $"{positionContext} {callsignContext} {starPrompt}".Trim(),
                 $"Loaded {activeCallsigns.Count} active aircraft " +
                 $"from a {snapshotAge.TotalSeconds:F0}-second-old snapshot. " +
-                "Dynamic airline speech context is ready." +
+                "Dynamic aircraft speech context is ready." +
                 routeStatus,
                 hasFreshSnapshot: true,
                 activeCallsigns,

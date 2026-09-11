@@ -55,6 +55,24 @@ public static class ActiveCallsignPromptBuilder
             string callsign =
                 rawCallsign.Trim().ToUpperInvariant();
 
+            if (NNumberCallsignParser.IsValid(callsign))
+            {
+                string nNumberPhrase =
+                    NNumberCallsignParser.ToPromptPhrase(callsign);
+
+                if (seen.Add(nNumberPhrase))
+                {
+                    promptCallsigns.Add(nNumberPhrase);
+                }
+
+                if (promptCallsigns.Count >= maximumCallsigns)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
             if (!ActiveAirlinePattern.IsMatch(callsign))
             {
                 continue;
@@ -100,7 +118,7 @@ public static class ActiveCallsignPromptBuilder
             return string.Empty;
         }
 
-        return "Active airline callsigns: " +
+        return "Active aircraft callsigns: " +
                string.Join(
                    ". ",
                    promptCallsigns) +

@@ -89,6 +89,46 @@ public sealed class VoiceCommandInterpreter
             return Recovered(parsed, recovery);
         }
 
+        if (IsUnmatchedAbbreviatedNNumber(parsed, activeCallsigns))
+        {
+            VoiceTranscriptRecoveryResult? recovery =
+                VoiceTranscriptRecovery.TryRecover(
+                    transcript,
+                    activeCallsigns,
+                    _airlineAliases,
+                    activeStars);
+
+            if (recovery is not null &&
+                !string.Equals(
+                    recovery.Callsign,
+                    parsed.Callsign,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                parsed = _parser.Parse(recovery.RecoveredTranscript);
+                return Recovered(parsed, recovery);
+            }
+
+            IReadOnlyList<string> candidates =
+                VoiceTranscriptRecovery.SuggestCallsigns(
+                    transcript,
+                    activeCallsigns,
+                    _airlineAliases);
+
+            if (candidates.Count > 1)
+            {
+                ArgumentException cause = new(
+                    "The abbreviated N-number matches more than one " +
+                    "active aircraft.",
+                    nameof(transcript));
+
+                throw new VoiceInterpretationException(
+                    cause.Message + " Possible active callsigns: " +
+                    string.Join(", ", candidates) + ".",
+                    candidates,
+                    cause);
+            }
+        }
+
         if (HasFuzzyNamedStarMismatch(parsed, activeStars))
         {
             VoiceTranscriptRecoveryResult? recovery =
@@ -121,6 +161,15 @@ public sealed class VoiceCommandInterpreter
             recovery.RecoveredTranscript,
             recovery.InstructionPhrase,
             recovery.StarWasCorrected);
+    }
+
+    private static bool IsUnmatchedAbbreviatedNNumber(
+        ParsedVoiceCommand parsed,
+        IReadOnlySet<string> activeCallsigns)
+    {
+        return parsed.Callsign.Length == 4 &&
+               NNumberCallsignParser.IsValid(parsed.Callsign) &&
+               !activeCallsigns.Contains(parsed.Callsign);
     }
 
     private static bool HasFuzzyNamedStarMismatch(

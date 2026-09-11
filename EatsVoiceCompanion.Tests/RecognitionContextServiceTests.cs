@@ -74,6 +74,25 @@ public sealed class RecognitionContextServiceTests
     }
 
     [Fact]
+    public void Build_ReturnsFreshNNumberPromptWithoutAirlineMatch()
+    {
+        RecognitionContextService service = CreateService(
+            Process(),
+            Snapshot(Now.AddSeconds(-15), "N253PZ"));
+
+        RecognitionContextResult result = service.Build("Atlanta Center");
+
+        Assert.True(result.HasFreshSnapshot);
+        Assert.Contains("N253PZ", result.ActiveCallsigns);
+        Assert.Contains(
+            "November Two Five Three Papa Zulu",
+            result.Prompt);
+        Assert.Contains(
+            "Dynamic aircraft speech context is ready",
+            result.StatusMessage);
+    }
+
+    [Fact]
     public void Build_AddsFreshNamedStarContextToPrompt()
     {
         RecognitionContextService service = CreateService(
