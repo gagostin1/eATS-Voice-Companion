@@ -26,6 +26,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Fly-present-heading, expect-approach, intercept-final, cleared-approach, final-approach-speed, and say-approach-request commands with approach-ID normalization, conservative ordering rules, editor support, and scenario-matrix coverage
 - Civil VHF contact-frequency, remain-this-frequency, say-again, and stand-by commands with FAA digit parsing, canonical eATS frequency abbreviation, conservative ordering, editor support, and scenario-matrix coverage
 - Full U.S. N-number callsigns with aviation digit/phonetic parsing, active-aircraft Whisper prompting, mixed-traffic scenario coverage, and snapshot-unique final-three abbreviation recovery
+- Transponder code, IDENT, altitude-reporting, normal, standby, and VFR commands with octal validation, conflict checks, speech/editor support, and scenario-matrix coverage
+- Cross-distance restrictions with eight-point direction normalization, conservative route-change ordering, speech/editor support, and scenario-matrix coverage
 
 ### Fixed
 
@@ -34,8 +36,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Planned
 
-- Aircraft-type-based general-aviation callsign phraseology
-- Additional route, holding, transponder, and initial-clearance commands
+- Broader real-world microphone, mixed-traffic, and eATS scenario testing
 
 ## [0.1.0] - 2026-09-06
 

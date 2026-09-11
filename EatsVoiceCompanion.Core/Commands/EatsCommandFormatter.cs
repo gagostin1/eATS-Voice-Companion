@@ -170,6 +170,21 @@ public static class EatsCommandFormatter
 
     public static string StandBy() => "SBY";
 
+    public static string SquawkCode(string code) =>
+        $"SQ{TransponderCodeParser.Parse(code)}";
+
+    public static string SquawkIdent() => "ID";
+
+    public static string SquawkAltitude() => "SQALT";
+
+    public static string SquawkNormal() => "SQNORM";
+
+    public static string SquawkStandby() => "SQSBY";
+
+    public static string SquawkVfr() => "SQVFR";
+
+    public static string StopAltitudeSquawk() => "STOPALTSQ";
+
     private static void ValidateSpeed(int speedKnots)
     {
         if (speedKnots is < 100 or > 350)
@@ -220,6 +235,24 @@ public static class EatsCommandFormatter
         string speed = MaintainSpeed(speedKnots)[1..];
 
         return $"{CrossAtAltitude(fix, altitudeFeet)}@{speed}K";
+    }
+
+    public static string CrossDistanceAtAltitude(
+        int distanceMiles,
+        string direction,
+        string fix,
+        int altitudeFeet)
+    {
+        if (distanceMiles is < 1 or > 999)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(distanceMiles),
+                "Cross distance must be between 1 and 999 miles.");
+        }
+
+        return $"X{distanceMiles}" +
+               $"{CrossDirectionNormalizer.Normalize(direction)}." +
+               $"{NormalizeFix(fix)}@{FormatAltitude(altitudeFeet)}";
     }
 
     public static string ProceedDirect(string fix)

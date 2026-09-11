@@ -56,6 +56,8 @@ public static partial class EatsTransmissionValidator
         ValidateInstructionOrder(instructions);
         ValidateApproachOrder(instructions);
         ValidateCommunicationOrder(instructions);
+        ValidateTransponderInstructions(instructions);
+        ValidateCrossDistanceInstructions(instructions);
 
         return normalized;
     }
@@ -65,7 +67,10 @@ public static partial class EatsTransmissionValidator
         if (instruction is "R" or "DV" or "EXP" or "SA" or
                 "RNS" or "SI" or "SM" or "SNS" or
                 "PH" or "INTC" or "CA" or "SAR" or "S-" or
-                "*0" or "?" or "SBY" ||
+                "*0" or "?" or "SBY" or
+                "ID" or "SQALT" or "SQNORM" or "SQSBY" or
+                "SQVFR" or "STOPALTSQ" ||
+            TransponderCodePattern().IsMatch(instruction) ||
             DirectPattern().IsMatch(instruction) ||
             ContactFrequencyPattern().IsMatch(instruction) &&
                 IsValidContactFrequency(instruction) ||
@@ -74,7 +79,9 @@ public static partial class EatsTransmissionValidator
             AltimeterPattern().IsMatch(instruction) ||
             PublishedSpeedPattern().IsMatch(instruction) ||
             CrossAtPattern().IsMatch(instruction) &&
-                IsValidCrossAt(instruction))
+                IsValidCrossAt(instruction) ||
+            CrossDistancePattern().IsMatch(instruction) &&
+                IsValidCrossDistance(instruction))
         {
             return true;
         }
@@ -196,7 +203,8 @@ public static partial class EatsTransmissionValidator
                instruction.StartsWith("DM", StringComparison.Ordinal) ||
                instruction.StartsWith("DVXM", StringComparison.Ordinal) ||
                instruction.StartsWith("PD", StringComparison.Ordinal) ||
-               CrossAtPattern().IsMatch(instruction);
+               CrossAtPattern().IsMatch(instruction) ||
+               CrossDistancePattern().IsMatch(instruction);
     }
 
     private static bool IsValidExpectedApproach(string instruction)
@@ -275,6 +283,56 @@ public static partial class EatsTransmissionValidator
                 "Say-again and stand-by responses must be staged alone.",
                 nameof(instructions));
         }
+    }
+
+    private static void ValidateTransponderInstructions(
+        string[] instructions)
+    {
+        string[] transponderInstructions = instructions
+            .Where(IsTransponderInstruction)
+            .ToArray();
+
+        if (transponderInstructions.Length == 0)
+        {
+            return;
+        }
+
+        int codeSelections = transponderInstructions.Count(
+            instruction =>
+                TransponderCodePattern().IsMatch(instruction) ||
+                instruction == "SQVFR");
+        int operatingModes = transponderInstructions.Count(
+            instruction => instruction is "SQNORM" or "SQSBY");
+        int altitudeModes = transponderInstructions.Count(
+            instruction => instruction is "SQALT" or "STOPALTSQ");
+        int identCommands = transponderInstructions.Count(
+            instruction => instruction == "ID");
+
+        if (codeSelections > 1 || operatingModes > 1 ||
+            altitudeModes > 1 || identCommands > 1)
+        {
+            throw new ArgumentException(
+                "Conflicting or duplicate transponder instructions " +
+                "cannot be staged together.",
+                nameof(instructions));
+        }
+
+        if (transponderInstructions.Contains("SQSBY") &&
+            transponderInstructions.Length > 1)
+        {
+            throw new ArgumentException(
+                "Squawk standby must be staged without another " +
+                "transponder instruction.",
+                nameof(instructions));
+        }
+    }
+
+    private static bool IsTransponderInstruction(string instruction)
+    {
+        return instruction is
+                   "ID" or "SQALT" or "SQNORM" or "SQSBY" or
+                   "SQVFR" or "STOPALTSQ" ||
+               TransponderCodePattern().IsMatch(instruction);
     }
 
     private static void ValidateApproachOrder(string[] instructions)
@@ -432,6 +490,71 @@ public static partial class EatsTransmissionValidator
         catch (OverflowException)
         {
             return false;
+        }
+    }
+
+    private static bool IsValidCrossDistance(string instruction)
+    {
+        Match match = CrossDistancePattern().Match(instruction);
+
+        if (!match.Success ||
+            !int.TryParse(match.Groups["distance"].Value, out int distance) ||
+            !int.TryParse(match.Groups["altitude"].Value, out int altitude))
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(
+                instruction,
+                EatsCommandFormatter.CrossDistanceAtAltitude(
+                    distance,
+                    match.Groups["direction"].Value,
+                    match.Groups["fix"].Value,
+                    checked(altitude * 100)),
+                StringComparison.Ordinal);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateCrossDistanceInstructions(
+        string[] instructions)
+    {
+        int[] crossDistanceIndexes = instructions
+            .Select((instruction, index) => (instruction, index))
+            .Where(item => CrossDistancePattern().IsMatch(item.instruction))
+            .Select(item => item.index)
+            .ToArray();
+
+        if (crossDistanceIndexes.Length == 0)
+        {
+            return;
+        }
+
+        if (crossDistanceIndexes.Length > 1)
+        {
+            throw new ArgumentException(
+                "Only one cross-distance restriction can be staged at a " +
+                "time because a later one clears the earlier altitude.",
+                nameof(instructions));
+        }
+
+        if (instructions
+            .Skip(crossDistanceIndexes[0] + 1)
+            .Any(instruction => DirectPattern().IsMatch(instruction)))
+        {
+            throw new ArgumentException(
+                "A direct command after a cross-distance restriction " +
+                "removes the restriction in eATS.",
+                nameof(instructions));
         }
     }
 
@@ -628,6 +751,11 @@ public static partial class EatsTransmissionValidator
         RegexOptions.CultureInvariant)]
     private static partial Regex CrossAtPattern();
 
+    [GeneratedRegex(
+        "^X(?<distance>[0-9]{1,3})(?<direction>NE|SE|SW|NW|N|E|S|W)\\.(?<fix>[A-Z0-9]{2,8})@(?<altitude>[0-9]{2,3})$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex CrossDistancePattern();
+
     [GeneratedRegex("^S(?<value>[0-9]{3})(?<limit>[+-]?)$", RegexOptions.CultureInvariant)]
     private static partial Regex SpeedPattern();
 
@@ -636,4 +764,7 @@ public static partial class EatsTransmissionValidator
 
     [GeneratedRegex("^EXP(?:[0-9]{2,3})?$", RegexOptions.CultureInvariant)]
     private static partial Regex ExpeditePattern();
+
+    [GeneratedRegex("^SQ[0-7]{4}$", RegexOptions.CultureInvariant)]
+    private static partial Regex TransponderCodePattern();
 }

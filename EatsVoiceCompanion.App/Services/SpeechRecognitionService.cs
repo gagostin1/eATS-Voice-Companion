@@ -41,7 +41,12 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "Report leaving flight level two four zero. " +
     "Report reaching one two thousand. Say altitude. " +
     "Comply with speed restrictions at HOMER. " +
-    "Resume published speed at HOMER.";
+    "Resume published speed at HOMER. " +
+    "Squawk four three two one. Squawk ident. " +
+    "Squawk altitude. Squawk normal. Squawk standby. Squawk VFR. " +
+    "Stop altitude squawk. " +
+    "Cross ten miles northwest of BURGL at flight level three three zero. " +
+    "Say again.";
 
     private readonly AppLogger? _logger;
     private bool _modelValidated;

@@ -21,6 +21,7 @@ The current workflow records a controller transmission, transcribes it locally w
 - Resolves descend-via-capable assigned STARs from eATS `LogDetail.txt` and `Airways.txt`
 - Supports published-speed compliance at a named fix while descending via, with simulator-safe command ordering
 - Supports pilot's-discretion descent, expedite, report-leaving/reaching, and say-altitude instructions
+- Supports transponder code, IDENT, altitude-reporting, normal, standby, and VFR instructions
 - Adds active airline and N-number callsigns to the speech-recognition prompt to improve callsign recognition
 - Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, and assigned STAR context
 - Lets the controller correct an imperfect transcript and interpret it again without making another recording
@@ -69,10 +70,15 @@ Supported instructions:
 | Remain this frequency | `DAL123 *0` |
 | Say again | `DAL123 ?` |
 | Stand by | `DAL123 SBY` |
+| Squawk a four-digit octal code | `DAL123 SQ4321` |
+| Squawk ident | `DAL123 ID` |
+| Squawk altitude/normal/standby/VFR | `DAL123 SQALT` / `DAL123 SQNORM` / `DAL123 SQSBY` / `DAL123 SQVFR` |
+| Stop altitude squawk | `DAL123 STOPALTSQ` |
 | Descend via and comply with published speeds at a fix | `DAL123 DV CWS@HOMER` |
 | Proceed direct | `DAL123 ..LOZIT` |
 | Cross a fix at an altitude | `DAL123 XOZZZI@120` |
 | Cross a fix at an altitude and speed | `DAL123 XOZZZI@120@250K` |
+| Cross a distance and direction from a fix at an altitude | `DAL123 X10NW.BURGL@330` |
 | Altimeter | `DAL123 A2992` |
 | Roger or welcome | `DAL123 R` |
 
@@ -96,7 +102,10 @@ Delta one two three, cleared for the approach, then reduce to final approach spe
 Delta one two three, contact Jacksonville Center one three two point three seven.
 Delta one two three, remain this frequency.
 Delta one two three, say again.
+Delta one two three, squawk four three two one and ident.
+November two five three papa zulu, squawk VFR.
 American thirteen oh seven, cross OZZZI at and maintain one two thousand at two five zero knots, the Atlanta altimeter two niner niner two.
+Delta one two three, cross ten miles northwest of BURGL at flight level three three zero.
 American thirteen oh seven, Atlanta Center, welcome.
 November two five three papa zulu, Atlanta Center, fly heading two seven zero.
 November three papa zulu, Atlanta Center, say altitude.
@@ -116,6 +125,10 @@ The preview displays one of three callsign states:
 Snapshot and route context are loaded at startup and refreshed before transcription, after transcription, when eATS detection is requested, and before a manual preview is built. The default freshness threshold is three minutes. eATS normally refreshes `SnapshotAuto.txt` and `LogDetail.txt` while the simulation is active. `Airways.txt` is treated as the installed static procedure database.
 
 Every generated preview also passes through a final grammar allowlist. Only the characters and complete command tokens required by the currently supported syntax are accepted. Control characters, unknown tokens, invalid values, unsafe command ordering, and partially recognized combined instructions are rejected before staging can receive them. Assigned speed and Mach commands use the documented ranges and exact/greater/less suffixes. Published-speed compliance uses the canonical `CWS@FIX` token, must follow `DV` or `DVXM` in the same preview, and must be reissued after a later direct or descend-via command. Expedite is rejected alongside descend via or pilot's-discretion descent, and it must follow the final altitude command because a later altitude assignment cancels it in eATS.
+
+Transponder assignments require exactly four separately spoken octal digits (`0` through `7`). Conflicting code, operating-mode, or altitude-reporting instructions are rejected in one preview. Code-plus-IDENT and code-plus-altitude-reporting combinations remain supported.
+
+Cross-distance restrictions require 1-999 miles, an eight-point compass direction, a full 2-8 character fix identifier, and an altitude. Only one can appear in a preview. A later direct command is rejected because eATS would remove the cross-distance restriction. Fix existence and route geometry remain controller-verified.
 
 If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR. Ambiguous callsigns and unsupported instructions remain rejected; when useful, the error lists likely active callsigns for the controller to compare. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. The transcript itself can also be corrected and submitted with **Interpret again** without rerecording. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
 
@@ -237,8 +250,10 @@ The data directory can be changed in the application and is saved locally. The a
 - `INTC` is accepted only after an explicit heading in the same preview. This intentionally rejects reliance on an earlier heading that the companion cannot verify from snapshot data.
 - Contact-frequency speech must contain three separately spoken digits before “point” and one or two after it. The companion accepts civil VHF frequencies from 118.000 through 136.975 MHz on documented 25 kHz channel endings and emits canonical abbreviated eATS tokens.
 - A frequency transfer must be the final token in a preview. Say-again and stand-by responses must be staged by themselves.
+- Transponder codes are syntax-validated but are not compared with the aircraft's assigned beacon code in its flight plan; verify every code before staging.
 - Contact-tower, advisory-frequency, and oceanic-communications shortcuts are deferred because they depend on facility or approach state the companion cannot yet verify. The eATS `??` communications-buffer reset is also deferred because it has a broader side effect than a normal radio response.
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
+- Cross-distance restrictions are syntax- and order-validated, but the companion does not verify that the named fix is in the aircraft route or that the direction matches the inbound route segment.
 - Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
 - Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
 - Generated tests cover core interpretation across varied airlines, flight numbers, positions, STARs, and command families, plus file/service integration; actual microphone hardware and WPF interaction still require manual testing.
@@ -255,7 +270,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 
 ## Development roadmap
 
-- Expand the [command catalog](docs/COMMAND_CATALOG.md), beginning with holding instructions and options
+- Keep the supported command set stable while expanding real-world microphone and eATS scenario testing
 - Support aircraft-type-based general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
 - Add an installer, code signing, and automated tagged releases

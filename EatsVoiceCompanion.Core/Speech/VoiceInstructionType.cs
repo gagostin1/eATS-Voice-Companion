@@ -35,10 +35,18 @@ public enum VoiceInstructionType
     RemainThisFrequency,
     SayAgain,
     StandBy,
+    SquawkCode,
+    SquawkIdent,
+    SquawkAltitude,
+    SquawkNormal,
+    SquawkStandby,
+    SquawkVfr,
+    StopAltitudeSquawk,
     ComplyWithPublishedSpeeds,
     ProceedDirect,
     CrossAtAltitude,
     CrossAtAltitudeAndSpeed,
+    CrossDistanceAtAltitude,
     Altimeter,
     Roger
 }

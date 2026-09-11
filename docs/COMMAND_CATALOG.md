@@ -37,6 +37,13 @@ contains only the compatibility facts needed by the original companion code.
 | Remain this frequency | `*0` | none |
 | Say again | `?` | none |
 | Stand by | `SBY` | none |
+| Squawk 4321 | `SQ4321` | `4321` |
+| Squawk ident / ident | `ID` | none |
+| Squawk altitude | `SQALT` | none |
+| Squawk normal | `SQNORM` | none |
+| Squawk standby | `SQSBY` | none |
+| Squawk VFR | `SQVFR` | none |
+| Stop altitude squawk | `STOPALTSQ` | none |
 | Descend via, comply with speed restrictions at HOMER | `DV CWS@HOMER` | `HOMER` |
 | Proceed direct OZZZI | `..OZZZI` | `OZZZI` |
 | Roger / welcome | `R` | none |
@@ -51,6 +58,7 @@ contains only the compatibility facts needed by the original companion code.
 | Say altitude | `SA` | none |
 | Cross OZZZI at 12,000 | `XOZZZI@120` | `OZZZI 12000` |
 | Cross OZZZI at and maintain 12,000 at 250 knots | `XOZZZI@120@250K` | `OZZZI 12000 250` |
+| Cross 10 miles northwest of BURGL at FL330 | `X10NW.BURGL@330` | `10 NW BURGL 33000` |
 
 Multiple supported instructions can be spoken in one transmission. Their eATS
 tokens are kept in spoken order and separated by spaces. A combined recognized
@@ -66,6 +74,12 @@ allowlisted token sequence can be corrected and rebuilt.
   token before manually pressing Enter in eATS.
 - Full fix identifiers containing 2-8 letters or digits are required. The
   companion does not generate eATS's one- or two-character fix abbreviations.
+- Cross-distance restrictions accept 1-999 miles and the directions N, NE, E,
+  SE, S, SW, W, and NW. Speech may use full compass words. Only one such
+  restriction is accepted per preview, and a following direct command is
+  rejected because eATS removes all cross-distance information. The companion
+  cannot verify route geometry, flight-path distance, or whether the direction
+  corresponds to the final segment into the named fix.
 - Assigned indicated speeds must be from 100 through 350 knots in 5-knot
   increments, matching FAA controller phraseology.
 - Assigned Mach numbers must be from .50 through .99. `+` means "or greater"
@@ -105,6 +119,16 @@ allowlisted token sequence can be corrected and rebuilt.
 - `*T` contact tower, `**` advisory frequency, and `*O` oceanic communications
   remain deferred until their facility/approach prerequisites can be evaluated.
   `??` is also deferred because it clears the aircraft communication buffer.
+- Transponder codes contain exactly four octal digits, so digits `8` and `9`
+  are rejected. The companion preserves leading zeroes and accepts only
+  digit-by-digit controller phraseology.
+- At most one code selection (`SQ<code>` or `SQVFR`), operating-mode command,
+  altitude-reporting command, and IDENT may appear in one preview. `SQSBY`
+  cannot be combined with another transponder instruction. `SQ<code> ID` and
+  `SQ<code> SQALT` are supported.
+- The companion does not yet compare a spoken code with the BCN field in the
+  aircraft flight plan. Code verification remains the controller's
+  responsibility before staging.
 - `DV` or `DVXM` must precede an assigned speed or Mach in the same transmission
   because eATS cancels assignments that appear before descend via.
 - Published-speed compliance emits canonical `CWS@<fix>` output. The supplied
@@ -140,17 +164,20 @@ allowlisted token sequence can be corrected and rebuilt.
   displayed as correction hints, and the controller can edit the transcript and
   choose **Interpret again** without making another recording.
 
-## Next command groups
+## Deliberately deferred and optional commands
 
-The remaining reference will be implemented in focused, testable groups:
+Initial-clearance/release commands and aircraft-type callsigns are outside the
+current project scope. Holding is also deferred. The supported command set is
+now intentionally stable while testing expands. Other reporting, navigation,
+relative-turn, and tower/advisory/oceanic shortcuts remain optional and outside
+the current plan. The communication shortcuts require reliable facility or
+approach state before they can be staged safely. The eATS `??` communication-
+buffer reset remains unsupported because it has a broader side effect than the
+supported `?` say-again response.
 
-1. Holding instructions and options.
-2. Transponder commands.
-3. Initial-clearance and release commands.
-
-Each group must include formatter tests, whole-transmission allowlist tests,
-spoken-parser tests, conflict/order tests, and manual eATS verification before
-it is considered supported.
+Any selected future group must include formatter tests, whole-transmission
+allowlist tests, spoken-parser tests, conflict/order tests, and manual eATS
+verification before it is considered supported.
 
 The shared production interpreter also has a generated scenario matrix spanning
 multiple airline identities, flight-number shapes, controller positions,

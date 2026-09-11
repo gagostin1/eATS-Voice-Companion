@@ -416,12 +416,21 @@ public partial class MainWindow : Window
             "RemainFrequency" => VoiceInstructionType.RemainThisFrequency,
             "SayAgain" => VoiceInstructionType.SayAgain,
             "StandBy" => VoiceInstructionType.StandBy,
+            "SquawkCode" => VoiceInstructionType.SquawkCode,
+            "SquawkIdent" => VoiceInstructionType.SquawkIdent,
+            "SquawkAltitude" => VoiceInstructionType.SquawkAltitude,
+            "SquawkNormal" => VoiceInstructionType.SquawkNormal,
+            "SquawkStandby" => VoiceInstructionType.SquawkStandby,
+            "SquawkVfr" => VoiceInstructionType.SquawkVfr,
+            "StopAltitudeSquawk" => VoiceInstructionType.StopAltitudeSquawk,
             "PublishedSpeed" =>
                 VoiceInstructionType.ComplyWithPublishedSpeeds,
             "Direct" => VoiceInstructionType.ProceedDirect,
             "CrossAltitude" => VoiceInstructionType.CrossAtAltitude,
             "CrossAltitudeSpeed" =>
                 VoiceInstructionType.CrossAtAltitudeAndSpeed,
+            "CrossDistanceAltitude" =>
+                VoiceInstructionType.CrossDistanceAtAltitude,
             "Altimeter" => VoiceInstructionType.Altimeter,
             "Roger" => VoiceInstructionType.Roger,
             _ => throw new InvalidOperationException(
@@ -1017,11 +1026,21 @@ public partial class MainWindow : Window
             VoiceInstructionType.RemainThisFrequency => "RemainFrequency",
             VoiceInstructionType.SayAgain => "SayAgain",
             VoiceInstructionType.StandBy => "StandBy",
+            VoiceInstructionType.SquawkCode => "SquawkCode",
+            VoiceInstructionType.SquawkIdent => "SquawkIdent",
+            VoiceInstructionType.SquawkAltitude => "SquawkAltitude",
+            VoiceInstructionType.SquawkNormal => "SquawkNormal",
+            VoiceInstructionType.SquawkStandby => "SquawkStandby",
+            VoiceInstructionType.SquawkVfr => "SquawkVfr",
+            VoiceInstructionType.StopAltitudeSquawk =>
+                "StopAltitudeSquawk",
             VoiceInstructionType.ComplyWithPublishedSpeeds => "PublishedSpeed",
             VoiceInstructionType.ProceedDirect => "Direct",
             VoiceInstructionType.CrossAtAltitude => "CrossAltitude",
             VoiceInstructionType.CrossAtAltitudeAndSpeed =>
                 "CrossAltitudeSpeed",
+            VoiceInstructionType.CrossDistanceAtAltitude =>
+                "CrossDistanceAltitude",
             VoiceInstructionType.Altimeter => "Altimeter",
             VoiceInstructionType.Roger => "Roger",
             _ => throw new InvalidOperationException(
@@ -1039,11 +1058,17 @@ public partial class MainWindow : Window
             VoiceInstructionType.CrossAtAltitudeAndSpeed =>
                 $"{instruction.TextValue} {instruction.NumericValue} " +
                 $"{instruction.SecondaryNumericValue}",
+            VoiceInstructionType.CrossDistanceAtAltitude =>
+                $"{instruction.SecondaryNumericValue} " +
+                $"{instruction.SecondaryTextValue} " +
+                $"{instruction.TextValue} {instruction.NumericValue}",
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 instruction.TextValue ?? string.Empty,
             VoiceInstructionType.ExpectApproach =>
                 instruction.TextValue ?? string.Empty,
             VoiceInstructionType.ContactFrequency =>
+                instruction.TextValue ?? string.Empty,
+            VoiceInstructionType.SquawkCode =>
                 instruction.TextValue ?? string.Empty,
             _ => instruction.NumericValue?.ToString() ?? string.Empty
         };

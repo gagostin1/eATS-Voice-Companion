@@ -76,6 +76,13 @@ public sealed class VoiceCommandInterpreterTests
             ("remain this frequency", "*0"),
             ("say again", "?"),
             ("stand by", "SBY"),
+            ("squawk four three two one", "SQ4321"),
+            ("squawk zero four two one then ident", "SQ0421 ID"),
+            ("squawk altitude", "SQALT"),
+            ("squawk normal", "SQNORM"),
+            ("squawk standby", "SQSBY"),
+            ("squawk VFR", "SQVFR"),
+            ("stop altitude squawk", "STOPALTSQ"),
             ("descend at pilot's discretion maintain one two thousand", "PD120"),
             ("expedite", "EXP"),
             ("expedite descent through flight level two eight zero", "EXP280"),
@@ -85,6 +92,7 @@ public sealed class VoiceCommandInterpreterTests
             ("proceed direct OZZZI", "..OZZZI"),
             ("roger", "R"),
             ("cross OZZZI at one two thousand", "XOZZZI@120"),
+            ("cross ten miles northwest of BURGL at flight level three three zero", "X10NW.BURGL@330"),
             ("the Atlanta altimeter two niner niner two", "A2992")
         ];
 
@@ -169,7 +177,11 @@ public sealed class VoiceCommandInterpreterTests
             ("maintain speed two five zero", "S250"),
             ("proceed direct OZZZI", "..OZZZI"),
             ("contact Atlanta Center one two five point one", "*251"),
+            ("squawk four three two one", "SQ4321"),
+            ("squawk ident", "ID"),
             ("say altitude", "SA"),
+            ("say again", "?"),
+            ("cross five miles south of OZZZI at one two thousand", "X5S.OZZZI@120"),
             ("roger", "R")
         ];
 

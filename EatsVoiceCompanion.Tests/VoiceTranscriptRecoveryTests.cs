@@ -261,4 +261,33 @@ public sealed class VoiceTranscriptRecoveryTests
                 .Parse(result.RecoveredTranscript)
                 .ToEatsCommand());
     }
+
+    [Theory]
+    [InlineData(
+        "Delter 123 squak four three two one",
+        "DAL123 SQ4321")]
+    [InlineData(
+        "Delter 123 squak ident",
+        "DAL123 ID")]
+    [InlineData(
+        "Delter 123 squak altitood",
+        "DAL123 SQALT")]
+    public void TryRecover_RepairsTransponderTranscripts(
+        string transcript,
+        string expectedCommand)
+    {
+        VoiceTranscriptRecoveryResult? result =
+            VoiceTranscriptRecovery.TryRecover(
+                transcript,
+                ["DAL123"],
+                Aliases,
+                new Dictionary<string, string>());
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            expectedCommand,
+            new VoiceCommandParser(Aliases)
+                .Parse(result.RecoveredTranscript)
+                .ToEatsCommand());
+    }
 }

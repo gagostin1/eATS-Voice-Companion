@@ -56,6 +56,14 @@ public static partial class VoiceTranscriptRecovery
         "say again",
         "stand by",
         "standby",
+        "stop altitude squawk",
+        "squawk altitude",
+        "squawk normal",
+        "squawk standby",
+        "squawk vfr",
+        "squawk ident",
+        "ident",
+        "squawk",
         "contact",
         "expect approach",
         "expect",
@@ -610,6 +618,16 @@ public static partial class VoiceTranscriptRecovery
             @"\b(?:climate maintain|climate maintainer|" +
             @"climbing to maintain)\b",
             "climb and maintain");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\bsquak\b",
+            "squawk");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\baltitood\b",
+            "altitude");
 
         return Regex.Replace(
             normalized,

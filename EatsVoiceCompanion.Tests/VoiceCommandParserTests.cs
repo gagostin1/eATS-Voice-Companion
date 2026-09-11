@@ -103,6 +103,16 @@ public sealed class VoiceCommandParserTests
     [InlineData(
         "Blue Streak 5596 descend via",
         "JIA5596 DV")]
+    [InlineData("Delta 9 squawk four three two one", "DAL9 SQ4321")]
+    [InlineData("Delta 9 squawk zero four two one", "DAL9 SQ0421")]
+    [InlineData("Delta 9 squawk four three two one and ident", "DAL9 SQ4321 ID")]
+    [InlineData("Delta 9 squawk ident", "DAL9 ID")]
+    [InlineData("Delta 9 ident", "DAL9 ID")]
+    [InlineData("Delta 9 squawk altitude", "DAL9 SQALT")]
+    [InlineData("Delta 9 squawk normal", "DAL9 SQNORM")]
+    [InlineData("Delta 9 squawk standby", "DAL9 SQSBY")]
+    [InlineData("Delta 9 squawk VFR", "DAL9 SQVFR")]
+    [InlineData("Delta 9 stop altitude squawk", "DAL9 STOPALTSQ")]
     [InlineData(
         "November two five three papa zulu fly heading two seven zero",
         "N253PZ FH270")]
@@ -152,6 +162,12 @@ public sealed class VoiceCommandParserTests
     [InlineData(
         "American 1307 cross OZZZI at 12,000",
         "AAL1307 XOZZZI@120")]
+    [InlineData(
+        "American 1307 cross ten miles northwest of BURGL at flight level three three zero",
+        "AAL1307 X10NW.BURGL@330")]
+    [InlineData(
+        "American 1307 cross one mile north east of OZZZI at and maintain one two thousand",
+        "AAL1307 X1NE.OZZZI@120")]
     [InlineData(
         "American 1307 the Atlanta altimeter 29.92",
         "AAL1307 A2992")]
@@ -281,6 +297,8 @@ public sealed class VoiceCommandParserTests
         "one two thousand at two five niner knots")]
     [InlineData(
         "American 1307 cross OZZZI at or above one two thousand")]
+    [InlineData(
+        "American 1307 cross ten miles north by northwest of BURGL at flight level three three zero")]
     public void Parse_RejectsUnsafeOrUnverifiableClearances(
         string transcript)
     {
@@ -295,6 +313,13 @@ public sealed class VoiceCommandParserTests
             });
 
         Assert.NotNull(exception);
+    }
+
+    [Fact]
+    public void Parse_DoesNotInterpretCommunicationBufferResetAsSayAgain()
+    {
+        Assert.Throws<InvalidOperationException>(
+            () => _parser.Parse("Delta 123 how do you read"));
     }
 
     [Fact]

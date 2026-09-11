@@ -116,6 +116,11 @@ public sealed partial class VoiceCommandParser
             IsFrequency: true),
 
         new(
+            "squawk",
+            VoiceInstructionType.SquawkCode,
+            IsTransponderCode: true),
+
+        new(
             "comply with published speed restrictions at",
             VoiceInstructionType.ComplyWithPublishedSpeeds,
             IsFix: true),
@@ -172,6 +177,13 @@ public sealed partial class VoiceCommandParser
                 "say again",
                 "stand by",
                 "standby",
+                "stop altitude squawk",
+                "squawk altitude",
+                "squawk normal",
+                "squawk standby",
+                "squawk vfr",
+                "squawk ident",
+                "ident",
                 "descend via",
                 "expedite",
                 "say altitude",
@@ -514,6 +526,13 @@ public sealed partial class VoiceCommandParser
                 TextValue: frequency);
         }
 
+        if (pattern.IsTransponderCode)
+        {
+            return new ParsedVoiceInstruction(
+                pattern.InstructionType,
+                TextValue: TransponderCodeParser.Parse(value));
+        }
+
         if (pattern.InstructionType == VoiceInstructionType.MaintainSpeed)
         {
             VoiceInstructionType type = ParseLimitSuffix(
@@ -646,7 +665,14 @@ public sealed partial class VoiceCommandParser
             ("remain this frequency", VoiceInstructionType.RemainThisFrequency),
             ("say again", VoiceInstructionType.SayAgain),
             ("stand by", VoiceInstructionType.StandBy),
-            ("standby", VoiceInstructionType.StandBy)
+            ("standby", VoiceInstructionType.StandBy),
+            ("stop altitude squawk", VoiceInstructionType.StopAltitudeSquawk),
+            ("squawk altitude", VoiceInstructionType.SquawkAltitude),
+            ("squawk normal", VoiceInstructionType.SquawkNormal),
+            ("squawk standby", VoiceInstructionType.SquawkStandby),
+            ("squawk vfr", VoiceInstructionType.SquawkVfr),
+            ("squawk ident", VoiceInstructionType.SquawkIdent),
+            ("ident", VoiceInstructionType.SquawkIdent)
         ];
 
         foreach (var pattern in patterns)
@@ -671,6 +697,12 @@ public sealed partial class VoiceCommandParser
         string Remaining) ParseCrossingRestriction(string value)
     {
         string afterCross = value["cross ".Length..].Trim();
+
+        if (ContainsDistanceSeparator(afterCross))
+        {
+            return ParseCrossDistanceRestriction(afterCross, value);
+        }
+
         int firstSpace = afterCross.IndexOf(' ');
 
         if (firstSpace <= 0)
@@ -742,7 +774,7 @@ public sealed partial class VoiceCommandParser
             return (
                 new ParsedVoiceInstruction(
                     VoiceInstructionType.CrossAtAltitudeAndSpeed,
-                    NumericValue: AviationAltitudeParser.Parse(altitudeText),
+                    NumericValue: ParseCrossingAltitude(altitudeText),
                     TextValue: fix,
                     SecondaryNumericValue:
                         AviationNumberParser.Parse(speedText)),
@@ -755,9 +787,99 @@ public sealed partial class VoiceCommandParser
         return (
             new ParsedVoiceInstruction(
                 VoiceInstructionType.CrossAtAltitude,
-                NumericValue: AviationAltitudeParser.Parse(altitude),
+                NumericValue: ParseCrossingAltitude(altitude),
                 TextValue: fix),
             remainingAfterAltitude);
+    }
+
+    private static bool ContainsDistanceSeparator(string value) =>
+        value.Contains(" mile ", StringComparison.Ordinal) ||
+        value.Contains(" miles ", StringComparison.Ordinal);
+
+    private static (
+        ParsedVoiceInstruction Instruction,
+        string Remaining) ParseCrossDistanceRestriction(
+            string afterCross,
+            string originalValue)
+    {
+        int distanceEnd = afterCross.IndexOf(
+            " miles ",
+            StringComparison.Ordinal);
+        int separatorLength = " miles ".Length;
+
+        if (distanceEnd < 0)
+        {
+            distanceEnd = afterCross.IndexOf(
+                " mile ",
+                StringComparison.Ordinal);
+            separatorLength = " mile ".Length;
+        }
+
+        string distanceText = afterCross[..distanceEnd].Trim();
+        string afterDistance = afterCross[
+            (distanceEnd + separatorLength)..].Trim();
+        int ofSeparator = afterDistance.IndexOf(
+            " of ",
+            StringComparison.Ordinal);
+
+        if (ofSeparator <= 0)
+        {
+            throw new ArgumentException(
+                "A cross-distance restriction must include a compass " +
+                "direction followed by 'of'.",
+                nameof(originalValue));
+        }
+
+        string direction = CrossDirectionNormalizer.Normalize(
+            afterDistance[..ofSeparator]);
+        string fixAndRestriction = afterDistance[
+            (ofSeparator + " of ".Length)..].Trim();
+        int restrictionSeparator = fixAndRestriction.IndexOf(
+            " at and maintain ",
+            StringComparison.Ordinal);
+        int restrictionSeparatorLength = " at and maintain ".Length;
+
+        if (restrictionSeparator <= 0)
+        {
+            restrictionSeparator = fixAndRestriction.IndexOf(
+                " at ",
+                StringComparison.Ordinal);
+            restrictionSeparatorLength = " at ".Length;
+        }
+
+        if (restrictionSeparator <= 0)
+        {
+            throw new ArgumentException(
+                "A cross-distance restriction requires a fix and altitude.",
+                nameof(originalValue));
+        }
+
+        string fix = ParseFix(
+            fixAndRestriction[..restrictionSeparator].Trim());
+        string altitudeAndRest = fixAndRestriction[
+            (restrictionSeparator + restrictionSeparatorLength)..].Trim();
+        (string altitude, string remaining) = TakeValue(altitudeAndRest);
+
+        return (
+            new ParsedVoiceInstruction(
+                VoiceInstructionType.CrossDistanceAtAltitude,
+                NumericValue: ParseCrossingAltitude(altitude),
+                TextValue: fix,
+                SecondaryNumericValue:
+                    AviationDistanceParser.Parse(distanceText),
+                SecondaryTextValue: direction),
+            remaining);
+    }
+
+    private static int ParseCrossingAltitude(string value)
+    {
+        const string flightLevel = "flight level ";
+
+        return value.StartsWith(flightLevel, StringComparison.Ordinal)
+            ? checked(
+                AviationNumberParser.Parse(value[flightLevel.Length..]) *
+                100)
+            : AviationAltitudeParser.Parse(value);
     }
 
     private static (
@@ -965,7 +1087,8 @@ public sealed partial class VoiceCommandParser
         bool IsAltitude = false,
         bool IsFix = false,
         bool IsApproachId = false,
-        bool IsFrequency = false);
+        bool IsFrequency = false,
+        bool IsTransponderCode = false);
 
     [GeneratedRegex(
         "^(?:the )?(?<star>[a-z0-9]+(?: [a-z0-9]+)?) " +

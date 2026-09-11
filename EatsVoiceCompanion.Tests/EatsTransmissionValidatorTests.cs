@@ -39,10 +39,20 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 *0", "AAL123 *0")]
     [InlineData("AAL123 ?", "AAL123 ?")]
     [InlineData("AAL123 SBY", "AAL123 SBY")]
+    [InlineData("AAL123 SQ0421", "AAL123 SQ0421")]
+    [InlineData("AAL123 SQ4321 ID", "AAL123 SQ4321 ID")]
+    [InlineData("AAL123 SQ4321 SQALT", "AAL123 SQ4321 SQALT")]
+    [InlineData("AAL123 SQNORM", "AAL123 SQNORM")]
+    [InlineData("AAL123 SQSBY", "AAL123 SQSBY")]
+    [InlineData("AAL123 SQVFR", "AAL123 SQVFR")]
+    [InlineData("AAL123 STOPALTSQ", "AAL123 STOPALTSQ")]
     [InlineData("AAL123 XOZZZI@120", "AAL123 XOZZZI@120")]
     [InlineData(
         "AAL123 XOZZZI@120@250K A2992",
         "AAL123 XOZZZI@120@250K A2992")]
+    [InlineData(
+        "AAL123 X10NW.BURGL@330",
+        "AAL123 X10NW.BURGL@330")]
     public void Validate_AcceptsSupportedGrammar(
         string input,
         string expected)
@@ -79,12 +89,20 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 XOZZZI@120@259K")]
     [InlineData("AAL123 XOZZZI@120@250")]
     [InlineData("AAL123 X@120")]
+    [InlineData("AAL123 X0NW.BURGL@330")]
+    [InlineData("AAL123 X010NW.BURGL@330")]
+    [InlineData("AAL123 X10NNW.BURGL@330")]
+    [InlineData("AAL123 X10NW.B@330")]
     [InlineData("AAL123 CWS@A")]
     [InlineData("AAL123 PS@HOMER")]
     [InlineData("AAL123 PD0")]
     [InlineData("AAL123 EXP999")]
     [InlineData("AAL123 RL5")]
     [InlineData("AAL123 RR601")]
+    [InlineData("AAL123 SQ123")]
+    [InlineData("AAL123 SQ1280")]
+    [InlineData("AAL123 SQ8888")]
+    [InlineData("AAL123 IDENT")]
     public void Validate_RejectsAnythingOutsideAllowlist(string input)
     {
         Assert.Throws<ArgumentException>(
@@ -152,6 +170,29 @@ public sealed class EatsTransmissionValidatorTests
     [InlineData("AAL123 ? R")]
     [InlineData("AAL123 R SBY")]
     public void Validate_RejectsUnsafeCommunicationOrdering(string input)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsTransmissionValidator.Validate(input));
+    }
+
+    [Theory]
+    [InlineData("AAL123 SQ4321 SQ1200")]
+    [InlineData("AAL123 SQ4321 SQVFR")]
+    [InlineData("AAL123 SQNORM SQSBY")]
+    [InlineData("AAL123 SQALT STOPALTSQ")]
+    [InlineData("AAL123 ID ID")]
+    [InlineData("AAL123 SQSBY ID")]
+    public void Validate_RejectsConflictingTransponderInstructions(
+        string input)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsTransmissionValidator.Validate(input));
+    }
+
+    [Theory]
+    [InlineData("AAL123 X10NW.BURGL@330 X5S.OZZZI@120")]
+    [InlineData("AAL123 X10NW.BURGL@330 ..OZZZI")]
+    public void Validate_RejectsUnsafeCrossDistanceOrdering(string input)
     {
         Assert.Throws<ArgumentException>(
             () => EatsTransmissionValidator.Validate(input));

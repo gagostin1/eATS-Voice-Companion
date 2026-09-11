@@ -126,6 +126,27 @@ public static class CommandPreviewBuilder
             VoiceInstructionType.StandBy =>
                 EatsCommandFormatter.StandBy(),
 
+            VoiceInstructionType.SquawkCode =>
+                EatsCommandFormatter.SquawkCode(value!),
+
+            VoiceInstructionType.SquawkIdent =>
+                EatsCommandFormatter.SquawkIdent(),
+
+            VoiceInstructionType.SquawkAltitude =>
+                EatsCommandFormatter.SquawkAltitude(),
+
+            VoiceInstructionType.SquawkNormal =>
+                EatsCommandFormatter.SquawkNormal(),
+
+            VoiceInstructionType.SquawkStandby =>
+                EatsCommandFormatter.SquawkStandby(),
+
+            VoiceInstructionType.SquawkVfr =>
+                EatsCommandFormatter.SquawkVfr(),
+
+            VoiceInstructionType.StopAltitudeSquawk =>
+                EatsCommandFormatter.StopAltitudeSquawk(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(value!),
 
@@ -137,6 +158,9 @@ public static class CommandPreviewBuilder
 
             VoiceInstructionType.CrossAtAltitudeAndSpeed =>
                 BuildCrossAtAltitudeAndSpeed(value),
+
+            VoiceInstructionType.CrossDistanceAtAltitude =>
+                BuildCrossDistanceAtAltitude(value),
 
             VoiceInstructionType.Altimeter =>
                 EatsCommandFormatter.Altimeter(
@@ -209,6 +233,20 @@ public static class CommandPreviewBuilder
             values[0],
             ParseNumber(values[1], "altitude"),
             ParseNumber(values[2], "speed"));
+    }
+
+    private static string BuildCrossDistanceAtAltitude(string? value)
+    {
+        string[] values = SplitValues(
+            value,
+            4,
+            "distance, direction, fix, and altitude");
+
+        return EatsCommandFormatter.CrossDistanceAtAltitude(
+            ParseNumber(values[0], "distance"),
+            values[1],
+            values[2],
+            ParseNumber(values[3], "altitude"));
     }
 
     private static string[] SplitValues(

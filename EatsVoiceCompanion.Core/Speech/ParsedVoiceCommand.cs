@@ -190,6 +190,28 @@ public sealed record ParsedVoiceCommand
             VoiceInstructionType.StandBy =>
                 EatsCommandFormatter.StandBy(),
 
+            VoiceInstructionType.SquawkCode =>
+                EatsCommandFormatter.SquawkCode(
+                    RequireTextValue(instruction)),
+
+            VoiceInstructionType.SquawkIdent =>
+                EatsCommandFormatter.SquawkIdent(),
+
+            VoiceInstructionType.SquawkAltitude =>
+                EatsCommandFormatter.SquawkAltitude(),
+
+            VoiceInstructionType.SquawkNormal =>
+                EatsCommandFormatter.SquawkNormal(),
+
+            VoiceInstructionType.SquawkStandby =>
+                EatsCommandFormatter.SquawkStandby(),
+
+            VoiceInstructionType.SquawkVfr =>
+                EatsCommandFormatter.SquawkVfr(),
+
+            VoiceInstructionType.StopAltitudeSquawk =>
+                EatsCommandFormatter.StopAltitudeSquawk(),
+
             VoiceInstructionType.ComplyWithPublishedSpeeds =>
                 EatsCommandFormatter.ComplyWithPublishedSpeeds(
                     RequireTextValue(instruction)),
@@ -208,6 +230,13 @@ public sealed record ParsedVoiceCommand
                     RequireTextValue(instruction),
                     RequireNumericValue(instruction),
                     RequireSecondaryNumericValue(instruction)),
+
+            VoiceInstructionType.CrossDistanceAtAltitude =>
+                EatsCommandFormatter.CrossDistanceAtAltitude(
+                    RequireSecondaryNumericValue(instruction),
+                    RequireSecondaryTextValue(instruction),
+                    RequireTextValue(instruction),
+                    RequireNumericValue(instruction)),
 
             VoiceInstructionType.Altimeter =>
                 EatsCommandFormatter.Altimeter(
@@ -254,5 +283,13 @@ public sealed record ParsedVoiceCommand
         return instruction.TextValue ??
             throw new InvalidOperationException(
                 "This instruction requires a text value.");
+    }
+
+    private static string RequireSecondaryTextValue(
+        ParsedVoiceInstruction instruction)
+    {
+        return instruction.SecondaryTextValue ??
+            throw new InvalidOperationException(
+                "This instruction requires a second text value.");
     }
 }

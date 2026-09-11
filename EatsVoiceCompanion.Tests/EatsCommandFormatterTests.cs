@@ -94,6 +94,13 @@ public sealed class EatsCommandFormatterTests
                 "ozzzi",
                 12000,
                 250));
+        Assert.Equal(
+            "X10NW.BURGL@330",
+            EatsCommandFormatter.CrossDistanceAtAltitude(
+                10,
+                "northwest",
+                "burgl",
+                33000));
         Assert.Equal("A2992", EatsCommandFormatter.Altimeter(2992));
         Assert.Equal(
             "CWS@HOMER",
@@ -218,6 +225,29 @@ public sealed class EatsCommandFormatterTests
         Assert.Equal("*0", EatsCommandFormatter.RemainThisFrequency());
         Assert.Equal("?", EatsCommandFormatter.SayAgain());
         Assert.Equal("SBY", EatsCommandFormatter.StandBy());
+    }
+
+    [Fact]
+    public void TransponderCommands_UseDocumentedEatsSyntax()
+    {
+        Assert.Equal("SQ0421", EatsCommandFormatter.SquawkCode("0421"));
+        Assert.Equal("ID", EatsCommandFormatter.SquawkIdent());
+        Assert.Equal("SQALT", EatsCommandFormatter.SquawkAltitude());
+        Assert.Equal("SQNORM", EatsCommandFormatter.SquawkNormal());
+        Assert.Equal("SQSBY", EatsCommandFormatter.SquawkStandby());
+        Assert.Equal("SQVFR", EatsCommandFormatter.SquawkVfr());
+        Assert.Equal(
+            "STOPALTSQ",
+            EatsCommandFormatter.StopAltitudeSquawk());
+    }
+
+    [Theory]
+    [InlineData("123")]
+    [InlineData("1280")]
+    public void SquawkCode_RejectsInvalidCode(string code)
+    {
+        Assert.Throws<ArgumentException>(
+            () => EatsCommandFormatter.SquawkCode(code));
     }
 
     [Fact]

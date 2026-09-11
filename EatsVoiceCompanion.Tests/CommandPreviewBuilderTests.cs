@@ -41,6 +41,10 @@ public sealed class CommandPreviewBuilderTests
         "OZZZI 12000 250",
         "DAL123 XOZZZI@120@250K")]
     [InlineData(
+        VoiceInstructionType.CrossDistanceAtAltitude,
+        "10 NW BURGL 33000",
+        "DAL123 X10NW.BURGL@330")]
+    [InlineData(
         VoiceInstructionType.DescendVia,
         "",
         "DAL123 DV")]
@@ -99,6 +103,16 @@ public sealed class CommandPreviewBuilderTests
     [InlineData(VoiceInstructionType.RemainThisFrequency, "", "DAL123 *0")]
     [InlineData(VoiceInstructionType.SayAgain, "", "DAL123 ?")]
     [InlineData(VoiceInstructionType.StandBy, "", "DAL123 SBY")]
+    [InlineData(VoiceInstructionType.SquawkCode, "0421", "DAL123 SQ0421")]
+    [InlineData(VoiceInstructionType.SquawkIdent, "", "DAL123 ID")]
+    [InlineData(VoiceInstructionType.SquawkAltitude, "", "DAL123 SQALT")]
+    [InlineData(VoiceInstructionType.SquawkNormal, "", "DAL123 SQNORM")]
+    [InlineData(VoiceInstructionType.SquawkStandby, "", "DAL123 SQSBY")]
+    [InlineData(VoiceInstructionType.SquawkVfr, "", "DAL123 SQVFR")]
+    [InlineData(
+        VoiceInstructionType.StopAltitudeSquawk,
+        "",
+        "DAL123 STOPALTSQ")]
     public void Build_ReturnsNewCommandFamilies(
         VoiceInstructionType type,
         string value,
