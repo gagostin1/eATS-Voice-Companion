@@ -49,6 +49,10 @@ public partial class MainWindow : Window
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyDictionary<string, string> _activeStars =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyDictionary<string, IReadOnlySet<string>>
+        _activeRouteFixes =
+            new Dictionary<string, IReadOnlySet<string>>(
+                StringComparer.OrdinalIgnoreCase);
     private bool _hasFreshSnapshot;
     private bool _currentPreviewRequiresStar;
     private string? _currentPreviewSpokenStar;
@@ -74,6 +78,7 @@ public partial class MainWindow : Window
         _commandStager = new EatsCommandStager();
 
         InitializeComponent();
+        FitWindowToWorkArea();
         ApplySettingsToUi();
         ConfigureEatsDataServices();
 
@@ -89,6 +94,17 @@ public partial class MainWindow : Window
             "ApplicationStarted",
             "The application initialized.",
             new { DeletedRecordings = deletedRecordings });
+    }
+
+    private void FitWindowToWorkArea()
+    {
+        Rect workArea = SystemParameters.WorkArea;
+
+        MaxWidth = workArea.Width;
+        MaxHeight = workArea.Height;
+        MinHeight = Math.Min(800, workArea.Height * 0.90);
+        Width = Math.Min(920, workArea.Width * 0.92);
+        Height = Math.Min(800, workArea.Height * 0.96);
     }
 
     private CompanionSettings LoadSettingsOrDefaults()
@@ -122,6 +138,8 @@ public partial class MainWindow : Window
             _settings.RecordingRetentionDays.ToString();
         MaximumRecordingsTextBox.Text =
             _settings.MaximumSavedRecordings.ToString();
+        AutoStageCommandsCheckBox.IsChecked =
+            _settings.AutomaticallyStageVerifiedCommands;
 
         SettingsStatusText.Text = _startupSettingsWarning ??
             $"Settings file: {_settingsService.SettingsFilePath}";
@@ -136,12 +154,13 @@ public partial class MainWindow : Window
         RoutedEventArgs e)
     {
         if (_audioRecorder.IsRecording ||
-            _transcriptionCancellation is not null)
+            _transcriptionCancellation is not null ||
+            _isStagingCommand)
         {
             SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
             SettingsStatusText.Text =
-                "Wait for recording or transcription to finish before " +
-                "changing settings.";
+                "Wait for recording, transcription, or command staging " +
+                "to finish before changing settings.";
             return;
         }
 
@@ -161,7 +180,9 @@ public partial class MainWindow : Window
                     MaximumRecordingsTextBox.Text,
                     "maximum recordings"),
                 PreferredMicrophoneName =
-                    (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name
+                    (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name,
+                AutomaticallyStageVerifiedCommands =
+                    AutoStageCommandsCheckBox.IsChecked == true
             };
 
             _settingsService.Save(updated);
@@ -319,6 +340,14 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_isStagingCommand)
+        {
+            CommandStageStatusText.Foreground = Brushes.DarkGoldenrod;
+            CommandStageStatusText.Text =
+                "Wait for the current command to finish staging in eATS.";
+            return;
+        }
+
         BuildRecognitionContext();
         PreviewErrorText.Text = string.Empty;
 
@@ -341,6 +370,8 @@ public partial class MainWindow : Window
             PrepareNewPreviewForStaging();
             string callsign = transmission.Split(' ')[0];
             UpdateCommandSafetyStatus(callsign);
+
+            _ = TryAutoStageCurrentCommandAsync("manual generation");
 
             _logger.Information(
                 "ManualPreviewBuilt",
@@ -438,10 +469,17 @@ public partial class MainWindow : Window
         };
     }
 
-    private async void StageCommand_Click(
-        object sender,
-        RoutedEventArgs e)
+    private async Task TryAutoStageCurrentCommandAsync(string source)
     {
+        if (!_settings.AutomaticallyStageVerifiedCommands)
+        {
+            CommandStageStatusText.Foreground = Brushes.DimGray;
+            CommandStageStatusText.Text =
+                "Automatic staging is off in Settings. The command was " +
+                "generated only.";
+            return;
+        }
+
         if (_isStagingCommand || _currentPreviewWasStaged)
         {
             return;
@@ -466,42 +504,6 @@ public partial class MainWindow : Window
                 return;
             }
 
-            string recoveryWarning = _currentPreviewWasRecovered
-                ? "\n\nWARNING: Speech recognition required a " +
-                  "best-effort interpretation. Compare the original " +
-                  "transcript and every preview field before approving."
-                : string.Empty;
-
-            MessageBoxResult confirmation = MessageBox.Show(
-                this,
-                "Stage this verified command in eATS?\n\n" +
-                transmission +
-                recoveryWarning +
-                "\n\nThe application will not press the final Enter key.",
-                "Stage verified command",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-
-            if (confirmation != MessageBoxResult.Yes)
-            {
-                CommandStageStatusText.Foreground = Brushes.DimGray;
-                CommandStageStatusText.Text = "Command staging was canceled.";
-                return;
-            }
-
-            BuildRecognitionContext();
-            UpdateCommandSafetyStatus(callsign);
-
-            if (_currentSafetyState != CommandSafetyState.Verified)
-            {
-                CommandStageStatusText.Foreground = Brushes.Firebrick;
-                CommandStageStatusText.Text =
-                    "The command was not staged because verification " +
-                    "changed while confirmation was open.";
-                return;
-            }
-
             EatsProcessInfo? process = _detector.FindRunningInstance();
 
             if (process is null)
@@ -511,9 +513,13 @@ public partial class MainWindow : Window
             }
 
             _isStagingCommand = true;
-            UpdateStageButtonState();
+            RecordButton.IsEnabled = false;
+            InterpretTranscriptButton.IsEnabled = false;
+            SaveSettingsButton.IsEnabled = false;
+            GenerateCommandButton.IsEnabled = false;
             CommandStageStatusText.Foreground = Brushes.DarkGoldenrod;
-            CommandStageStatusText.Text = "Staging the command in eATS...";
+            CommandStageStatusText.Text =
+                "Verified command ready. Staging it in eATS...";
 
             await _commandStager.StageAsync(
                 process,
@@ -523,13 +529,15 @@ public partial class MainWindow : Window
             _currentPreviewWasStaged = true;
             CommandStageStatusText.Foreground = Brushes.ForestGreen;
             CommandStageStatusText.Text =
-                "Command staged in eATS. Review it there, then press " +
-                "Enter yourself to transmit.";
+                (_currentPreviewWasRecovered
+                    ? "Best-effort command staged in eATS. Carefully review "
+                    : "Command staged in eATS. Review ") +
+                "it there, then press Enter yourself to transmit.";
 
             _logger.Information(
                 "CommandStaged",
                 "A verified command was staged without transmission.",
-                new { process.ProcessId });
+                new { process.ProcessId, Source = source });
         }
         catch (OperationCanceledException)
             when (_lifetimeCancellation.IsCancellationRequested)
@@ -554,7 +562,15 @@ public partial class MainWindow : Window
         finally
         {
             _isStagingCommand = false;
-            UpdateStageButtonState();
+
+            if (_transcriptionCancellation is null &&
+                !_audioRecorder.IsRecording)
+            {
+                RecordButton.IsEnabled = true;
+                InterpretTranscriptButton.IsEnabled = true;
+                SaveSettingsButton.IsEnabled = true;
+                GenerateCommandButton.IsEnabled = true;
+            }
         }
     }
 
@@ -609,6 +625,13 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
 
+        if (_isStagingCommand)
+        {
+            RecordingStatusText.Text =
+                "Wait for the current command to finish staging in eATS.";
+            return;
+        }
+
         if (MicrophoneComboBox.SelectedItem
             is not AudioInputDevice microphone)
         {
@@ -624,6 +647,8 @@ public partial class MainWindow : Window
                 microphone.DeviceNumber);
 
             SaveSettingsButton.IsEnabled = false;
+            InterpretTranscriptButton.IsEnabled = false;
+            GenerateCommandButton.IsEnabled = false;
             RecordButton.Content = "Recording — release to stop";
             RecordingStatusText.Text =
                 $"Recording from {microphone.Name}\n{filePath}";
@@ -638,6 +663,8 @@ public partial class MainWindow : Window
             RecordButton.ReleaseMouseCapture();
             RecordButton.Content = "Hold to record";
             SaveSettingsButton.IsEnabled = true;
+            InterpretTranscriptButton.IsEnabled = true;
+            GenerateCommandButton.IsEnabled = true;
             RecordingStatusText.Text =
                 $"Recording could not start: {exception.Message}";
 
@@ -872,9 +899,10 @@ public partial class MainWindow : Window
         RecordButton.Content = isBusy
             ? "Transcribing..."
             : "Hold to record";
-        RecordButton.IsEnabled = !isBusy;
-        SaveSettingsButton.IsEnabled = !isBusy;
-        InterpretTranscriptButton.IsEnabled = !isBusy;
+        RecordButton.IsEnabled = !isBusy && !_isStagingCommand;
+        SaveSettingsButton.IsEnabled = !isBusy && !_isStagingCommand;
+        InterpretTranscriptButton.IsEnabled = !isBusy && !_isStagingCommand;
+        GenerateCommandButton.IsEnabled = !isBusy && !_isStagingCommand;
         CancelTranscriptionButton.IsEnabled = isBusy;
         CancelTranscriptionButton.Content = "Cancel transcription";
     }
@@ -883,6 +911,13 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_isStagingCommand)
+        {
+            SpeechStatusText.Text =
+                "Wait for the current command to finish staging in eATS.";
+            return;
+        }
+
         BuildVoicePreview(TranscriptText.Text);
     }
 
@@ -914,7 +949,8 @@ public partial class MainWindow : Window
                     transcript,
                     ControllerPositionTextBox.Text,
                     _activeCallsigns,
-                    _activeStars);
+                    _activeStars,
+                    _activeRouteFixes);
             ParsedVoiceCommand parsed = interpretation.Command;
 
             string transmission = EatsTransmissionValidator.Validate(
@@ -929,6 +965,7 @@ public partial class MainWindow : Window
                 GetSpokenStar(parsed));
             PrepareNewPreviewForStaging();
             UpdateCommandSafetyStatus(parsed.Callsign);
+            _ = TryAutoStageCurrentCommandAsync("voice recognition");
             if (interpretation.Kind == VoiceInterpretationKind.Strict)
             {
                 SpeechStatusText.Text =
@@ -947,7 +984,8 @@ public partial class MainWindow : Window
                     new
                     {
                         interpretation.RecoveredInstructionPhrase,
-                        interpretation.StarWasCorrected
+                        interpretation.StarWasCorrected,
+                        interpretation.RouteFixWasCorrected
                     });
             }
         }
@@ -1105,6 +1143,7 @@ public partial class MainWindow : Window
     {
         _activeCallsigns = context.ActiveCallsigns;
         _activeStars = context.ActiveStars;
+        _activeRouteFixes = context.ActiveRouteFixes;
         _hasFreshSnapshot = context.HasFreshSnapshot;
         SnapshotStatusText.Text = context.StatusMessage;
     }
@@ -1131,8 +1170,10 @@ public partial class MainWindow : Window
         _currentPreviewWasStaged = false;
         CommandStageStatusText.Foreground = Brushes.DimGray;
         CommandStageStatusText.Text =
-            "Verify the command, then choose Stage in eATS. " +
-            "The final Enter key is always left to you.";
+            _settings.AutomaticallyStageVerifiedCommands
+                ? "A freshly verified command will be staged automatically. " +
+                  "The final Enter key is always left to you."
+                : "Automatic staging is off in Settings.";
     }
 
     private void UpdateCommandSafetyStatus(string callsign)
@@ -1221,15 +1262,6 @@ public partial class MainWindow : Window
 
         CommandSafetyStatusText.Foreground = presentation.Foreground;
         CommandSafetyStatusText.Text = presentation.Message;
-        UpdateStageButtonState();
-    }
-
-    private void UpdateStageButtonState()
-    {
-        StageCommandButton.IsEnabled =
-            !_isStagingCommand &&
-            !_currentPreviewWasStaged &&
-            _currentSafetyState == CommandSafetyState.Verified;
     }
 
     protected override void OnClosed(EventArgs e)

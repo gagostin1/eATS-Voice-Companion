@@ -39,6 +39,9 @@ public sealed class EatsRouteParserTests
         DescendViaProcedure procedure = Assert.Single(procedures);
         Assert.Equal("BANKR5", procedure.Name);
         Assert.Equal("KCLT", procedure.Destination);
+        Assert.Contains("TMALE", procedure.Fixes!);
+        Assert.Contains("BRRTO", procedure.Fixes!);
+        Assert.Contains("UNCIR", procedure.Fixes!);
     }
 
     [Fact]
@@ -79,5 +82,33 @@ public sealed class EatsRouteParserTests
             ActiveStarResolver.Resolve(["JIA5588"], routes, procedures);
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public void RouteFixResolver_CombinesFlightPlanAndAssignedStarFixes()
+    {
+        IReadOnlyDictionary<string, GeneratedAircraftRoute> routes =
+            GeneratedRouteLogParser.Parse(
+            [
+                "Generated IFR 793 DAL688 GSO KATL " +
+                "GSO./.KLQK..DGESS.OZZZI1.KATL"
+            ]);
+        DescendViaProcedure[] procedures =
+        [
+            new(
+                "OZZZI1",
+                "KATL",
+                new HashSet<string>(["WINNG", "OZZZI", "HAARY"]))
+        ];
+
+        IReadOnlyDictionary<string, IReadOnlySet<string>> result =
+            ActiveRouteFixResolver.Resolve(["DAL688"], routes, procedures);
+
+        Assert.Contains("KLQK", result["DAL688"]);
+        Assert.Contains("DGESS", result["DAL688"]);
+        Assert.Contains("OZZZI", result["DAL688"]);
+        Assert.Contains("HAARY", result["DAL688"]);
+        Assert.DoesNotContain("OZZZI1", result["DAL688"]);
+        Assert.DoesNotContain("KATL", result["DAL688"]);
     }
 }

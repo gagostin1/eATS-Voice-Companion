@@ -373,4 +373,87 @@ public sealed class VoiceCommandInterpreterTests
         Assert.Contains("JIA5595", exception.Message);
         Assert.Contains("JIA5597", exception.Message);
     }
+
+    [Fact]
+    public void Interpret_UsesAircraftRouteToCorrectPhoneticFix()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Delta 688 Atlanta Center cross Aussie at and maintain " +
+                "one 3,000 at 250 knots",
+                "Atlanta Center",
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>(),
+                new Dictionary<string, IReadOnlySet<string>>
+                {
+                    ["DAL688"] = new HashSet<string>(
+                        ["DGESS", "OZZZI", "HAARY"],
+                        StringComparer.OrdinalIgnoreCase)
+                });
+
+        Assert.Equal("DAL688 XOZZZI@130@250K", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.Recovered, result.Kind);
+        Assert.True(result.RouteFixWasCorrected);
+    }
+
+    [Fact]
+    public void Interpret_RecoversClearedDirectAndAircraftRouteFix()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Delta 688 at Lenis Center clear direct Aussie",
+                "Atlanta Center",
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>(),
+                new Dictionary<string, IReadOnlySet<string>>
+                {
+                    ["DAL688"] = new HashSet<string>(
+                        ["DGESS", "OZZZI", "HAARY"],
+                        StringComparer.OrdinalIgnoreCase)
+                });
+
+        Assert.Equal("DAL688 ..OZZZI", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.Recovered, result.Kind);
+        Assert.True(result.RouteFixWasCorrected);
+    }
+
+    [Fact]
+    public void Interpret_BlocksUnmatchedFixWhenAircraftRouteIsAvailable()
+    {
+        VoiceInterpretationException exception = Assert.Throws<
+            VoiceInterpretationException>(() =>
+                new VoiceCommandInterpreter(Aliases).Interpret(
+                    "Delta 688 proceed direct unknown",
+                    null,
+                    new HashSet<string>(["DAL688"]),
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, IReadOnlySet<string>>
+                    {
+                        ["DAL688"] = new HashSet<string>(
+                            ["DGESS", "OZZZI", "HAARY"],
+                            StringComparer.OrdinalIgnoreCase)
+                    }));
+
+        Assert.Contains("could not be matched uniquely", exception.Message);
+    }
+
+    [Fact]
+    public void Interpret_BlocksAmbiguousPhoneticRouteFix()
+    {
+        VoiceInterpretationException exception = Assert.Throws<
+            VoiceInterpretationException>(() =>
+                new VoiceCommandInterpreter(Aliases).Interpret(
+                    "Delta 688 proceed direct Aussie",
+                    null,
+                    new HashSet<string>(["DAL688"]),
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, IReadOnlySet<string>>
+                    {
+                        ["DAL688"] = new HashSet<string>(
+                            ["OZZZI", "OSSEY"],
+                            StringComparer.OrdinalIgnoreCase)
+                    }));
+
+        Assert.Contains("could not be matched uniquely", exception.Message);
+    }
 }

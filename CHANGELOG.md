@@ -8,6 +8,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- A modern three-tab interface that prioritizes voice operation while separating manual command generation and connection/audio settings
+- Optional automatic staging of freshly verified voice and manual commands, while retaining the controller's final Enter action
 - Cobertura code-coverage collection, validation, summaries, and downloadable CI artifacts
 - Explicit stage-only entry of freshly verified commands into the eATS radio-command field, with foreground/process checks and no final Enter key
 - Ordered combined-instruction parsing with whole-preview allowlist validation
@@ -28,11 +30,14 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Full U.S. N-number callsigns with aviation digit/phonetic parsing, active-aircraft Whisper prompting, mixed-traffic scenario coverage, and snapshot-unique final-three abbreviation recovery
 - Transponder code, IDENT, altitude-reporting, normal, standby, and VFR commands with octal validation, conflict checks, speech/editor support, and scenario-matrix coverage
 - Cross-distance restrictions with eight-point direction normalization, conservative route-change ordering, speech/editor support, and scenario-matrix coverage
+- Aircraft-specific flight-plan and STAR fix context for Whisper prompting and unique correction of misheard direct/crossing fixes
 
 ### Fixed
 
 - Airline entries with trailing flight-number ranges, including Blue Streak, Endeavor, Piedmont, Brickyard, and SkyWest, are now loaded from `Airlines.txt`
 - Stale snapshots retain non-authoritative callsign context for best-effort preview recovery while staging remains disabled
+- Mixed word/digit altitude transcripts such as `one 3,000` are normalized without accepting ambiguous cardinal wording
+- `cleared direct` and common `clear direct` transcriptions are recognized as proceed-direct instructions
 
 ### Planned
 

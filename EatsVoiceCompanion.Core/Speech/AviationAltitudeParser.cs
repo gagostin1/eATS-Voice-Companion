@@ -28,6 +28,26 @@ public static class AviationAltitudeParser
             return numericAltitude;
         }
 
+        if (normalized.Any(char.IsDigit) &&
+            normalized.Any(char.IsLetter) &&
+            !normalized.Contains(" thousand", StringComparison.Ordinal) &&
+            !normalized.Contains(" hundred", StringComparison.Ordinal))
+        {
+            try
+            {
+                int mixedAltitude = AviationNumberParser.Parse(normalized);
+
+                if (mixedAltitude >= 1000)
+                {
+                    return mixedAltitude;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Continue to the descriptive altitude error below.
+            }
+        }
+
         const string thousandWord = " thousand";
 
         int thousandIndex = normalized.IndexOf(

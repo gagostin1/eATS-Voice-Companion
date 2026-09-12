@@ -11,6 +11,9 @@ public sealed class AviationAltitudeParserTests
     [InlineData("five thousand", 5000)]
     [InlineData("four thousand five hundred", 4500)]
     [InlineData("one zero thousand five hundred", 10500)]
+    [InlineData("one 3,000", 13000)]
+    [InlineData("one 3000", 13000)]
+    [InlineData("1 three 000", 13000)]
     public void Parse_ReturnsExpectedAltitude(
         string input,
         int expected)
@@ -25,6 +28,7 @@ public sealed class AviationAltitudeParserTests
     [InlineData("seventeen thousand")]
     [InlineData("one zero thousand fifty")]
     [InlineData("ten grand")]
+    [InlineData("one 30")]
     public void Parse_RejectsUnsupportedPhraseology(
         string input)
     {

@@ -7,7 +7,8 @@ public sealed record RecognitionContextResult(
     string StatusMessage,
     bool HasFreshSnapshot,
     IReadOnlySet<string> ActiveCallsigns,
-    IReadOnlyDictionary<string, string> ActiveStars);
+    IReadOnlyDictionary<string, string> ActiveStars,
+    IReadOnlyDictionary<string, IReadOnlySet<string>> ActiveRouteFixes);
 
 public sealed class RecognitionContextService
 {
@@ -58,6 +59,8 @@ public sealed class RecognitionContextService
             new(StringComparer.OrdinalIgnoreCase);
         IReadOnlyDictionary<string, string> activeStars =
             EmptyActiveStars();
+        IReadOnlyDictionary<string, IReadOnlySet<string>> activeRouteFixes =
+            EmptyActiveRouteFixes();
 
         try
         {
@@ -69,7 +72,8 @@ public sealed class RecognitionContextService
                     "Active-aircraft context was not used.",
                     hasFreshSnapshot: false,
                     activeCallsigns,
-                    activeStars);
+                    activeStars,
+                    activeRouteFixes);
             }
 
             EatsSnapshotData snapshot = _snapshotService.Load();
@@ -90,7 +94,8 @@ public sealed class RecognitionContextService
                 if (activeCallsigns.Count > 0 &&
                     _routeContextService is not null)
                 {
-                    (activeStars, _) = LoadRouteContext(activeCallsigns);
+                    (activeStars, activeRouteFixes, _) =
+                        LoadRouteContext(activeCallsigns);
                 }
 
                 string staleCallsignContext =
@@ -99,10 +104,11 @@ public sealed class RecognitionContextService
                         _airlineAliases);
                 string staleStarPrompt = BuildStarPrompt(
                     activeStars.Values);
+                string staleFixPrompt = BuildFixPrompt(activeRouteFixes);
 
                 return Result(
                     ($"{positionContext} {staleCallsignContext} " +
-                     staleStarPrompt).Trim(),
+                     $"{staleStarPrompt} {staleFixPrompt}").Trim(),
                     $"The eATS snapshot is stale " +
                     $"({snapshotAge.TotalMinutes:F1} minutes old). " +
                     "Its aircraft context may be used only for " +
@@ -110,7 +116,8 @@ public sealed class RecognitionContextService
                     "remains disabled.",
                     hasFreshSnapshot: false,
                     activeCallsigns,
-                    activeStars);
+                    activeStars,
+                    activeRouteFixes);
             }
 
             if (activeCallsigns.Count == 0)
@@ -120,15 +127,16 @@ public sealed class RecognitionContextService
                     "The snapshot contained no active aircraft.",
                     hasFreshSnapshot: true,
                     activeCallsigns,
-                    activeStars);
+                    activeStars,
+                    activeRouteFixes);
             }
 
             string routeStatus = string.Empty;
 
             if (_routeContextService is not null)
             {
-                (activeStars, routeStatus) = LoadRouteContext(
-                    activeCallsigns);
+                (activeStars, activeRouteFixes, routeStatus) =
+                    LoadRouteContext(activeCallsigns);
             }
 
             string callsignContext = ActiveCallsignPromptBuilder.Build(
@@ -143,20 +151,24 @@ public sealed class RecognitionContextService
                     "but none had supported callsigns.",
                     hasFreshSnapshot: true,
                     activeCallsigns,
-                    activeStars);
+                    activeStars,
+                    activeRouteFixes);
             }
 
             string starPrompt = BuildStarPrompt(activeStars.Values);
+            string fixPrompt = BuildFixPrompt(activeRouteFixes);
 
             return Result(
-                $"{positionContext} {callsignContext} {starPrompt}".Trim(),
+                ($"{positionContext} {callsignContext} {starPrompt} " +
+                 fixPrompt).Trim(),
                 $"Loaded {activeCallsigns.Count} active aircraft " +
                 $"from a {snapshotAge.TotalSeconds:F0}-second-old snapshot. " +
                 "Dynamic aircraft speech context is ready." +
                 routeStatus,
                 hasFreshSnapshot: true,
                 activeCallsigns,
-                activeStars);
+                activeStars,
+                activeRouteFixes);
         }
         catch (Exception exception)
         {
@@ -171,12 +183,14 @@ public sealed class RecognitionContextService
                 exception.Message,
                 hasFreshSnapshot: false,
                 activeCallsigns,
-                activeStars);
+                activeStars,
+                activeRouteFixes);
         }
     }
 
     private (
         IReadOnlyDictionary<string, string> ActiveStars,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> ActiveRouteFixes,
         string Status) LoadRouteContext(HashSet<string> activeCallsigns)
     {
         try
@@ -194,14 +208,17 @@ public sealed class RecognitionContextService
             {
                 return (
                     EmptyActiveStars(),
+                    EmptyActiveRouteFixes(),
                     $" Named STAR context is stale " +
                     $"({routeAge.TotalMinutes:F1} minutes old).");
             }
 
             return (
                 routes.ActiveStars,
+                routes.ActiveRouteFixes,
                 $" Verified route context for " +
-                $"{routes.ActiveStars.Count} descend-via aircraft.");
+                $"{routes.ActiveStars.Count} descend-via aircraft and " +
+                $"{routes.ActiveRouteFixes.Count} aircraft flight plans.");
         }
         catch (Exception exception)
         {
@@ -212,6 +229,7 @@ public sealed class RecognitionContextService
 
             return (
                 EmptyActiveStars(),
+                EmptyActiveRouteFixes(),
                 " Named STAR context is unavailable.");
         }
     }
@@ -230,9 +248,34 @@ public sealed class RecognitionContextService
               string.Join(". ", phrases) + ".";
     }
 
+    private static string BuildFixPrompt(
+        IReadOnlyDictionary<string, IReadOnlySet<string>> routeFixes)
+    {
+        string[] fixes = routeFixes
+            .Take(40)
+            .SelectMany(pair => pair.Value.OrderBy(
+                value => value,
+                StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(120)
+            .ToArray();
+
+        return fixes.Length == 0
+            ? string.Empty
+            : "Active flight-plan and arrival fixes: " +
+              string.Join(", ", fixes) + ".";
+    }
+
     private static IReadOnlyDictionary<string, string> EmptyActiveStars()
     {
         return new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>>
+        EmptyActiveRouteFixes()
+    {
+        return new Dictionary<string, IReadOnlySet<string>>(
             StringComparer.OrdinalIgnoreCase);
     }
 
@@ -241,13 +284,15 @@ public sealed class RecognitionContextService
         string status,
         bool hasFreshSnapshot,
         HashSet<string> activeCallsigns,
-        IReadOnlyDictionary<string, string> activeStars)
+        IReadOnlyDictionary<string, string> activeStars,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> activeRouteFixes)
     {
         return new RecognitionContextResult(
             prompt,
             status,
             hasFreshSnapshot,
             activeCallsigns,
-            activeStars);
+            activeStars,
+            activeRouteFixes);
     }
 }

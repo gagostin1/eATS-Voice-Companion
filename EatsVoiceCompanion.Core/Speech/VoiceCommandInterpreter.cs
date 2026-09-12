@@ -11,7 +11,8 @@ public sealed record VoiceCommandInterpretation(
     VoiceInterpretationKind Kind,
     string InterpretedTranscript,
     string? RecoveredInstructionPhrase = null,
-    bool StarWasCorrected = false);
+    bool StarWasCorrected = false,
+    bool RouteFixWasCorrected = false);
 
 public sealed class VoiceInterpretationException : InvalidOperationException
 {
@@ -44,7 +45,8 @@ public sealed class VoiceCommandInterpreter
         string transcript,
         string? controllerPosition,
         IReadOnlySet<string> activeCallsigns,
-        IReadOnlyDictionary<string, string> activeStars)
+        IReadOnlyDictionary<string, string> activeStars,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? activeRouteFixes = null)
     {
         ArgumentNullException.ThrowIfNull(activeCallsigns);
         ArgumentNullException.ThrowIfNull(activeStars);
@@ -86,7 +88,9 @@ public sealed class VoiceCommandInterpreter
             }
 
             parsed = _parser.Parse(recovery.RecoveredTranscript);
-            return Recovered(parsed, recovery);
+            return ApplyRouteFixContext(
+                Recovered(parsed, recovery),
+                activeRouteFixes);
         }
 
         if (IsUnmatchedAbbreviatedNNumber(parsed, activeCallsigns))
@@ -105,7 +109,9 @@ public sealed class VoiceCommandInterpreter
                     StringComparison.OrdinalIgnoreCase))
             {
                 parsed = _parser.Parse(recovery.RecoveredTranscript);
-                return Recovered(parsed, recovery);
+                return ApplyRouteFixContext(
+                    Recovered(parsed, recovery),
+                    activeRouteFixes);
             }
 
             IReadOnlyList<string> candidates =
@@ -141,14 +147,91 @@ public sealed class VoiceCommandInterpreter
             if (recovery?.StarWasCorrected == true)
             {
                 parsed = _parser.Parse(recovery.RecoveredTranscript);
-                return Recovered(parsed, recovery);
+                return ApplyRouteFixContext(
+                    Recovered(parsed, recovery),
+                    activeRouteFixes);
             }
         }
 
-        return new VoiceCommandInterpretation(
-            parsed,
-            VoiceInterpretationKind.Strict,
-            transcript);
+        return ApplyRouteFixContext(
+            new VoiceCommandInterpretation(
+                parsed,
+                VoiceInterpretationKind.Strict,
+                transcript),
+            activeRouteFixes);
+    }
+
+    private static VoiceCommandInterpretation ApplyRouteFixContext(
+        VoiceCommandInterpretation interpretation,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? activeRouteFixes)
+    {
+        ParsedVoiceCommand command = interpretation.Command;
+
+        if (activeRouteFixes is null ||
+            !activeRouteFixes.TryGetValue(
+                command.Callsign,
+                out IReadOnlySet<string>? routeFixes) ||
+            routeFixes.Count == 0)
+        {
+            return interpretation;
+        }
+
+        bool corrected = false;
+        List<ParsedVoiceInstruction> instructions = new();
+
+        foreach (ParsedVoiceInstruction instruction in command.Instructions)
+        {
+            if (!UsesRouteFix(instruction.InstructionType) ||
+                string.IsNullOrWhiteSpace(instruction.TextValue) ||
+                routeFixes.Contains(instruction.TextValue))
+            {
+                instructions.Add(instruction);
+                continue;
+            }
+
+            string? matchedFix = RouteFixMatcher.FindUniqueMatch(
+                instruction.TextValue,
+                routeFixes);
+
+            if (matchedFix is null)
+            {
+                ArgumentException cause = new(
+                    $"The recognized fix '{instruction.TextValue}' could " +
+                    "not be matched uniquely to this aircraft's flight " +
+                    "plan or arrival. Correct the transcript and interpret " +
+                    "it again.",
+                    "transcript");
+
+                throw new VoiceInterpretationException(
+                    cause.Message,
+                    Array.Empty<string>(),
+                    cause);
+            }
+
+            instructions.Add(instruction with { TextValue = matchedFix });
+            corrected = true;
+        }
+
+        if (!corrected)
+        {
+            return interpretation;
+        }
+
+        return interpretation with
+        {
+            Command = new ParsedVoiceCommand(command.Callsign, instructions),
+            Kind = VoiceInterpretationKind.Recovered,
+            RouteFixWasCorrected = true
+        };
+    }
+
+    private static bool UsesRouteFix(VoiceInstructionType instructionType)
+    {
+        return instructionType is VoiceInstructionType.ProceedDirect or
+            VoiceInstructionType.CrossAtAltitude or
+            VoiceInstructionType.CrossAtAltitudeAndSpeed or
+            VoiceInstructionType.CrossDistanceAtAltitude or
+            VoiceInstructionType.ComplyWithPublishedSpeeds;
     }
 
     private static VoiceCommandInterpretation Recovered(

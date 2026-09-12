@@ -64,6 +64,11 @@ public sealed class EatsDataServiceTests : IDisposable
             airwaysPath).Load(["JIA5588"]);
 
         Assert.Equal("BANKR5", result.ActiveStars["JIA5588"]);
+        Assert.Contains("AGUVE", result.ActiveRouteFixes["JIA5588"]);
+        Assert.Contains("CRDET", result.ActiveRouteFixes["JIA5588"]);
+        Assert.Contains("FIX1", result.ActiveRouteFixes["JIA5588"]);
+        Assert.Contains("FIX2", result.ActiveRouteFixes["JIA5588"]);
+        Assert.Contains("MORE", result.ActiveRouteFixes["JIA5588"]);
     }
 
     public void Dispose()

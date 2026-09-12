@@ -82,6 +82,10 @@ public static partial class VoiceTranscriptRecovery
         "maintain mach",
         "proceed direct to",
         "proceed direct",
+        "cleared direct to",
+        "cleared direct",
+        "clear direct to",
+        "clear direct",
         "descend via",
         "welcome",
         "roger"

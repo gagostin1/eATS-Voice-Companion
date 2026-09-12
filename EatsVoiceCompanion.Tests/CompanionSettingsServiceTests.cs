@@ -21,7 +21,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             SnapshotFreshnessMinutes = 5,
             RecordingRetentionDays = 14,
             MaximumSavedRecordings = 50,
-            PreferredMicrophoneName = "Test microphone"
+            PreferredMicrophoneName = "Test microphone",
+            AutomaticallyStageVerifiedCommands = false
         };
 
         service.Save(expected);
@@ -33,6 +34,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(expected.RecordingRetentionDays, actual.RecordingRetentionDays);
         Assert.Equal(expected.MaximumSavedRecordings, actual.MaximumSavedRecordings);
         Assert.Equal(expected.PreferredMicrophoneName, actual.PreferredMicrophoneName);
+        Assert.Equal(
+            expected.AutomaticallyStageVerifiedCommands,
+            actual.AutomaticallyStageVerifiedCommands);
     }
 
     [Fact]
@@ -46,6 +50,30 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(3, result.SnapshotFreshnessMinutes);
         Assert.Equal(7, result.RecordingRetentionDays);
         Assert.Equal(100, result.MaximumSavedRecordings);
+        Assert.True(result.AutomaticallyStageVerifiedCommands);
+    }
+
+    [Fact]
+    public void Load_EnablesAutoStagingForLegacySettings()
+    {
+        Directory.CreateDirectory(_directory);
+        string path = Path.Combine(_directory, "legacy-settings.json");
+        File.WriteAllText(
+            path,
+            $$"""
+            {
+              "ControllerPosition": "Atlanta Center",
+              "EatsDataDirectory": "{{_directory.Replace("\\", "\\\\")}}",
+              "SnapshotFreshnessMinutes": 3,
+              "RecordingRetentionDays": 7,
+              "MaximumSavedRecordings": 100
+            }
+            """);
+
+        CompanionSettings result =
+            new CompanionSettingsService(path).Load();
+
+        Assert.True(result.AutomaticallyStageVerifiedCommands);
     }
 
     public void Dispose()

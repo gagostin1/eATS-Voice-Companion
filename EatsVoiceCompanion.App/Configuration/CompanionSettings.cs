@@ -16,6 +16,8 @@ public sealed class CompanionSettings
 
     public string? PreferredMicrophoneName { get; set; }
 
+    public bool AutomaticallyStageVerifiedCommands { get; set; } = true;
+
     public static string GetDefaultEatsDataDirectory()
     {
         return Path.Combine(

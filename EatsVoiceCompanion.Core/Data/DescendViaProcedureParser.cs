@@ -5,7 +5,8 @@ namespace EatsVoiceCompanion.Core.Data;
 
 public sealed record DescendViaProcedure(
     string Name,
-    string Destination);
+    string Destination,
+    IReadOnlySet<string>? Fixes = null);
 
 public static partial class DescendViaProcedureParser
 {
@@ -14,8 +15,8 @@ public static partial class DescendViaProcedureParser
     {
         ArgumentNullException.ThrowIfNull(lines);
 
-        List<DescendViaProcedure> procedures = new();
-        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, ProcedureAccumulator> procedures =
+            new(StringComparer.OrdinalIgnoreCase);
 
         foreach (string? line in lines)
         {
@@ -38,13 +39,42 @@ public static partial class DescendViaProcedureParser
                 .ToUpperInvariant();
             string key = $"{name}|{destination}";
 
-            if (seen.Add(key))
+            if (!procedures.TryGetValue(key, out ProcedureAccumulator? item))
             {
-                procedures.Add(new DescendViaProcedure(name, destination));
+                item = new ProcedureAccumulator(name, destination);
+                procedures[key] = item;
+            }
+
+            foreach (string fix in ParseFixes(line, name, destination))
+            {
+                item.Fixes.Add(fix);
             }
         }
 
-        return new ReadOnlyCollection<DescendViaProcedure>(procedures);
+        return new ReadOnlyCollection<DescendViaProcedure>(
+            procedures.Values
+                .Select(item => new DescendViaProcedure(
+                    item.Name,
+                    item.Destination,
+                    new HashSet<string>(
+                        item.Fixes,
+                        StringComparer.OrdinalIgnoreCase)))
+                .ToArray());
+    }
+
+    private static IEnumerable<string> ParseFixes(
+        string line,
+        string procedureName,
+        string destination)
+    {
+        return line
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim().ToUpperInvariant())
+            .Where(token =>
+                token != procedureName &&
+                token != destination &&
+                !token.StartsWith('*') &&
+                FixPattern().IsMatch(token));
     }
 
     [GeneratedRegex(
@@ -53,4 +83,17 @@ public static partial class DescendViaProcedureParser
         ".*\\s(?<destination>[A-Z][A-Z0-9]{2,4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ProcedurePattern();
+
+    [GeneratedRegex(
+        "^[A-Z][A-Z0-9]{1,7}$",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex FixPattern();
+
+    private sealed record ProcedureAccumulator(
+        string Name,
+        string Destination)
+    {
+        public HashSet<string> Fixes { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+    }
 }

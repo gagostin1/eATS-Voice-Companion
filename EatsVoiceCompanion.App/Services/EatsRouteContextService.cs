@@ -6,6 +6,7 @@ namespace EatsVoiceCompanion.App.Services;
 
 public sealed record EatsRouteContextData(
     IReadOnlyDictionary<string, string> ActiveStars,
+    IReadOnlyDictionary<string, IReadOnlySet<string>> ActiveRouteFixes,
     DateTime LastWriteTimeUtc);
 
 public interface IEatsRouteContextService
@@ -60,12 +61,18 @@ public sealed class EatsRouteContextService : IEatsRouteContextService
                 activeCallsigns,
                 routes,
                 procedures);
+        IReadOnlyDictionary<string, IReadOnlySet<string>> activeRouteFixes =
+            ActiveRouteFixResolver.Resolve(
+                activeCallsigns,
+                routes,
+                procedures);
 
         return new EatsRouteContextData(
             new ReadOnlyDictionary<string, string>(
                 new Dictionary<string, string>(
                     activeStars,
                     StringComparer.OrdinalIgnoreCase)),
+            activeRouteFixes,
             File.GetLastWriteTimeUtc(LogDetailFilePath));
     }
 

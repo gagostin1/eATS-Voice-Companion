@@ -104,6 +104,7 @@ public sealed class RecognitionContextServiceTests
                     {
                         ["AAL123"] = "BANKR5"
                     },
+                    new Dictionary<string, IReadOnlySet<string>>(),
                     Now.AddSeconds(-20))));
 
         RecognitionContextResult result = service.Build("Atlanta Center");
@@ -125,6 +126,7 @@ public sealed class RecognitionContextServiceTests
                     {
                         ["AAL123"] = "BANKR5"
                     },
+                    new Dictionary<string, IReadOnlySet<string>>(),
                     Now.AddMinutes(-4))));
 
         RecognitionContextResult result = service.Build("Atlanta Center");
@@ -132,6 +134,33 @@ public sealed class RecognitionContextServiceTests
         Assert.True(result.HasFreshSnapshot);
         Assert.Empty(result.ActiveStars);
         Assert.Contains("STAR context is stale", result.StatusMessage);
+    }
+
+    [Fact]
+    public void Build_AddsAircraftRouteFixesToRecognitionContext()
+    {
+        RecognitionContextService service = CreateService(
+            Process(),
+            Snapshot(Now.AddSeconds(-30), "AAL123"),
+            new FakeRouteContextService(
+                new EatsRouteContextData(
+                    new Dictionary<string, string>
+                    {
+                        ["AAL123"] = "OZZZI1"
+                    },
+                    new Dictionary<string, IReadOnlySet<string>>
+                    {
+                        ["AAL123"] = new HashSet<string>(
+                            ["DGESS", "OZZZI", "HAARY"],
+                            StringComparer.OrdinalIgnoreCase)
+                    },
+                    Now.AddSeconds(-20))));
+
+        RecognitionContextResult result = service.Build("Atlanta Center");
+
+        Assert.Contains("OZZZI", result.Prompt);
+        Assert.Contains("DGESS", result.ActiveRouteFixes["AAL123"]);
+        Assert.Contains("1 aircraft flight plans", result.StatusMessage);
     }
 
     private static RecognitionContextService CreateService(

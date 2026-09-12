@@ -146,6 +146,26 @@ public sealed partial class VoiceCommandParser
             IsFix: true),
 
         new(
+            "cleared direct to",
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true),
+
+        new(
+            "cleared direct",
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true),
+
+        new(
+            "clear direct to",
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true),
+
+        new(
+            "clear direct",
+            VoiceInstructionType.ProceedDirect,
+            IsFix: true),
+
+        new(
             "proceed direct",
             VoiceInstructionType.ProceedDirect,
             IsFix: true)
