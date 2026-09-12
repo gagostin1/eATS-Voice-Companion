@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace EatsVoiceCompanion.App.Services;
 
@@ -11,6 +12,9 @@ public sealed class WindowsEatsWindowInput : IEatsWindowInput
     private const uint Unicode = 0x0004;
     private const ushort EscapeKey = 0x1B;
     private const ushort EnterKey = 0x0D;
+    private const ushort BackspaceKey = 0x08;
+    private const ushort ControlKey = 0x11;
+    private const ushort AKey = 0x41;
 
     public bool IsWindowOwnedByProcess(
         nint windowHandle,
@@ -44,9 +48,80 @@ public sealed class WindowsEatsWindowInput : IEatsWindowInput
         return GetForegroundWindow() == windowHandle;
     }
 
+    public bool FocusRadioCommandField(nint windowHandle)
+    {
+        List<ChildEditWindow> edits = [];
+
+        _ = EnumChildWindows(
+            windowHandle,
+            (child, _) =>
+            {
+                StringBuilder className = new(capacity: 128);
+                _ = GetClassName(child, className, className.Capacity);
+                string value = className.ToString();
+
+                if (IsWindowVisible(child) &&
+                    IsWindowEnabled(child) &&
+                    (value.Contains("edit", StringComparison.OrdinalIgnoreCase) ||
+                     value.Contains(
+                         "textbox",
+                         StringComparison.OrdinalIgnoreCase)) &&
+                    GetWindowRect(child, out WindowRectangle rectangle))
+                {
+                    edits.Add(new ChildEditWindow(child, rectangle));
+                }
+
+                return true;
+            },
+            IntPtr.Zero);
+
+        ChildEditWindow? radioField = edits
+            .OrderByDescending(edit => edit.Rectangle.Top)
+            .ThenBy(edit => edit.Rectangle.Left)
+            .FirstOrDefault();
+
+        if (radioField is null)
+        {
+            return false;
+        }
+
+        uint currentThread = GetCurrentThreadId();
+        uint targetThread = GetWindowThreadProcessId(
+            radioField.Handle,
+            out _);
+        bool attached = currentThread != targetThread &&
+            AttachThreadInput(currentThread, targetThread, true);
+
+        try
+        {
+            _ = SetFocus(radioField.Handle);
+            return GetFocus() == radioField.Handle;
+        }
+        finally
+        {
+            if (attached)
+            {
+                _ = AttachThreadInput(currentThread, targetThread, false);
+            }
+        }
+    }
+
     public void SendEscape()
     {
         SendVirtualKey(EscapeKey);
+    }
+
+    public void ClearFocusedText()
+    {
+        Send(
+        [
+            CreateKeyboardInput(ControlKey, 0, 0),
+            CreateKeyboardInput(AKey, 0, 0),
+            CreateKeyboardInput(AKey, 0, KeyUp),
+            CreateKeyboardInput(ControlKey, 0, KeyUp),
+            CreateKeyboardInput(BackspaceKey, 0, 0),
+            CreateKeyboardInput(BackspaceKey, 0, KeyUp)
+        ]);
     }
 
     public void SendEnter()
@@ -163,6 +238,21 @@ public sealed class WindowsEatsWindowInput : IEatsWindowInput
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRectangle
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    private sealed record ChildEditWindow(
+        nint Handle,
+        WindowRectangle Rectangle);
+
+    private delegate bool EnumChildProc(nint windowHandle, nint parameter);
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct HardwareInputData
     {
         public uint Message;
@@ -188,6 +278,49 @@ public sealed class WindowsEatsWindowInput : IEatsWindowInput
     private static extern uint GetWindowThreadProcessId(
         nint windowHandle,
         out uint processId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumChildWindows(
+        nint parentWindow,
+        EnumChildProc callback,
+        nint parameter);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(
+        nint windowHandle,
+        StringBuilder className,
+        int maximumCount);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(
+        nint windowHandle,
+        out WindowRectangle rectangle);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(nint windowHandle);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowEnabled(nint windowHandle);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(
+        uint sourceThread,
+        uint targetThread,
+        bool attach);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetFocus(nint windowHandle);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetFocus();
 
     [DllImport("user32.dll")]
     private static extern nint GetForegroundWindow();

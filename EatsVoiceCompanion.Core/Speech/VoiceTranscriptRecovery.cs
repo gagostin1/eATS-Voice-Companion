@@ -8,6 +8,13 @@ public sealed record VoiceTranscriptRecoveryResult(
     string InstructionPhrase,
     bool StarWasCorrected);
 
+public sealed record VoiceTranscriptHypothesis(
+    string RecoveredTranscript,
+    string Callsign,
+    string InstructionPhrase,
+    double Score,
+    bool StarWasCorrected);
+
 public static partial class VoiceTranscriptRecovery
 {
     private const double MinimumInstructionSimilarity = 0.62;
@@ -15,6 +22,7 @@ public static partial class VoiceTranscriptRecovery
     private const double MinimumCallsignScore = 0.60;
     private const double MinimumWinnerMargin = 0.08;
     private const double MinimumStarSimilarity = 0.55;
+    private const double MinimumHypothesisInstructionSimilarity = 0.42;
 
     private static readonly string[] InstructionPhrases =
     [
@@ -34,6 +42,7 @@ public static partial class VoiceTranscriptRecovery
         "report leaving",
         "report reaching",
         "say altitude",
+        "altimeter",
         "say normal speed and mach",
         "say normal speed or mach",
         "say normal speed",
@@ -91,6 +100,16 @@ public static partial class VoiceTranscriptRecovery
         "roger"
     ];
 
+    private static readonly IReadOnlySet<string> InstructionAnchorWords =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "altimeter", "altitude", "approach", "climb", "comply",
+            "contact", "cross", "descend", "direct", "expedite",
+            "fly", "heading", "ident", "intercept", "mach", "remain",
+            "report", "resume", "roger", "say", "speed", "squawk",
+            "stand", "standby", "stop", "turn", "welcome"
+        };
+
     public static VoiceTranscriptRecoveryResult? TryRecover(
         string transcript,
         IEnumerable<string> activeCallsigns,
@@ -106,8 +125,8 @@ public static partial class VoiceTranscriptRecovery
         ArgumentNullException.ThrowIfNull(airlineAliases);
         ArgumentNullException.ThrowIfNull(activeStars);
 
-        string normalized = NormalizeObservedPhrases(
-            NormalizeWords(transcript));
+        string normalized = SeparateLeadingAirlineNumber(
+            NormalizeObservedPhrases(NormalizeWords(transcript)));
         string[] tokens = normalized.Split(
             ' ',
             StringSplitOptions.RemoveEmptyEntries);
@@ -186,8 +205,8 @@ public static partial class VoiceTranscriptRecovery
         ArgumentNullException.ThrowIfNull(activeCallsigns);
         ArgumentNullException.ThrowIfNull(airlineAliases);
 
-        string normalized = NormalizeObservedPhrases(
-            NormalizeWords(transcript));
+        string normalized = SeparateLeadingAirlineNumber(
+            NormalizeObservedPhrases(NormalizeWords(transcript)));
         string[] tokens = normalized.Split(
             ' ',
             StringSplitOptions.RemoveEmptyEntries);
@@ -207,7 +226,185 @@ public static partial class VoiceTranscriptRecovery
         return candidates.Take(maximumSuggestions).ToArray();
     }
 
+    public static IReadOnlyList<VoiceTranscriptHypothesis>
+        GenerateHypotheses(
+            string transcript,
+            IEnumerable<string> activeCallsigns,
+            IReadOnlyDictionary<string, string> airlineAliases,
+            IReadOnlyDictionary<string, string> activeStars,
+            string? controllerPosition = null,
+            int maximumHypotheses = 12)
+    {
+        if (string.IsNullOrWhiteSpace(transcript) || maximumHypotheses < 1)
+        {
+            return Array.Empty<VoiceTranscriptHypothesis>();
+        }
+
+        ArgumentNullException.ThrowIfNull(activeCallsigns);
+        ArgumentNullException.ThrowIfNull(airlineAliases);
+        ArgumentNullException.ThrowIfNull(activeStars);
+
+        string[] active = activeCallsigns
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        string normalized = SeparateLeadingAirlineNumber(
+            NormalizeObservedPhrases(NormalizeWords(transcript)));
+        string[] tokens = normalized.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+        List<VoiceTranscriptHypothesis> hypotheses = new();
+
+        foreach (InstructionMatch instruction in FindInstructionMatches(
+                     tokens,
+                     MinimumHypothesisInstructionSimilarity)
+                 .Take(maximumHypotheses * 2))
+        {
+            if (instruction.StartIndex == 0)
+            {
+                continue;
+            }
+
+            string[] callsignAndPosition = tokens[..instruction.StartIndex];
+            CallsignMatch? callsign = FindCallsign(
+                callsignAndPosition,
+                active,
+                airlineAliases,
+                out _,
+                allowHypothesisMatch: true);
+
+            if (callsign is null && active.Length > 0)
+            {
+                string forcedCallsign = SelectBestActiveCallsign(
+                    string.Join(' ', callsignAndPosition),
+                    active,
+                    airlineAliases)!;
+                callsign = new CallsignMatch(
+                    forcedCallsign,
+                    Score: active.Length == 1 ? 0.50 : 0.30,
+                    ExactNumber: false);
+            }
+
+            if (callsign is null)
+            {
+                continue;
+            }
+
+            string remainder = string.Join(
+                ' ',
+                tokens[(instruction.StartIndex +
+                    instruction.TokenCount)..]);
+            remainder = CorrectFlightLevelRemainder(
+                instruction.Phrase,
+                remainder);
+            remainder = ExpandBareAltimeter(
+                instruction.Phrase,
+                remainder,
+                controllerPosition);
+            bool starWasCorrected = false;
+
+            if (instruction.Phrase == "descend via" &&
+                activeStars.TryGetValue(
+                    callsign.Callsign,
+                    out string? assignedStar))
+            {
+                (remainder, starWasCorrected) = CorrectNamedStar(
+                    remainder,
+                    assignedStar);
+            }
+
+            string recovered = instruction.Phrase == "altimeter"
+                ? $"{callsign.Callsign} the " +
+                  $"{GetAltimeterFacility(controllerPosition)} altimeter"
+                : $"{callsign.Callsign} {instruction.Phrase}";
+
+            if (remainder.Length > 0)
+            {
+                recovered += " " + remainder;
+            }
+
+            hypotheses.Add(new VoiceTranscriptHypothesis(
+                recovered,
+                callsign.Callsign,
+                instruction.Phrase,
+                instruction.Similarity * 0.70 + callsign.Score * 0.30,
+                starWasCorrected));
+        }
+
+        return hypotheses
+            .GroupBy(
+                hypothesis => hypothesis.RecoveredTranscript,
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.MaxBy(item => item.Score)!)
+            .OrderByDescending(hypothesis => hypothesis.Score)
+            .Take(maximumHypotheses)
+            .ToArray();
+    }
+
+    public static string? SelectBestActiveCallsign(
+        string transcript,
+        IEnumerable<string> activeCallsigns,
+        IReadOnlyDictionary<string, string> airlineAliases)
+    {
+        string[] active = activeCallsigns
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (active.Length == 0)
+        {
+            return null;
+        }
+
+        string normalized = SeparateLeadingAirlineNumber(
+            NormalizeObservedPhrases(NormalizeWords(transcript)));
+        string[] tokens = normalized.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+        CallsignMatch? direct = FindCallsign(
+            tokens,
+            active,
+            airlineAliases,
+            out _,
+            allowHypothesisMatch: true);
+
+        if (direct is not null)
+        {
+            return direct.Callsign;
+        }
+
+        string observedDigits = new(
+            normalized.Where(char.IsDigit).ToArray());
+        bool soundsLikeNNumber = tokens.FirstOrDefault() is "november" or "n";
+
+        return active
+            .Select(callsign => new
+            {
+                Callsign = callsign,
+                Score = FallbackCallsignScore(
+                    callsign,
+                    observedDigits,
+                    soundsLikeNNumber,
+                    normalized,
+                    airlineAliases)
+            })
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Callsign, StringComparer.Ordinal)
+            .First()
+            .Callsign;
+    }
+
     private static InstructionMatch? FindInstruction(string[] tokens)
+    {
+        return FindInstructionMatches(tokens, MinimumInstructionSimilarity)
+            .FirstOrDefault();
+    }
+
+    private static IReadOnlyList<InstructionMatch> FindInstructionMatches(
+        string[] tokens,
+        double minimumSimilarity)
     {
         List<InstructionMatch> matches = new();
 
@@ -228,7 +425,8 @@ public static partial class VoiceTranscriptRecovery
                         tokens.AsSpan(start, count).ToArray());
                     double similarity = Similarity(candidate, phrase);
 
-                    if (similarity >= MinimumInstructionSimilarity)
+                    if (similarity >= minimumSimilarity &&
+                        HasInstructionAnchor(candidate, phrase))
                     {
                         matches.Add(new InstructionMatch(
                             start,
@@ -241,17 +439,46 @@ public static partial class VoiceTranscriptRecovery
         }
 
         return matches
+            .GroupBy(match => new
+            {
+                match.StartIndex,
+                match.Phrase
+            })
+            .Select(group => group
+                .OrderByDescending(match => match.Similarity)
+                .ThenBy(match => Math.Abs(
+                    match.TokenCount -
+                    (match.Phrase.Count(character => character == ' ') + 1)))
+                .First())
             .OrderByDescending(match => match.Similarity)
             .ThenBy(match => match.StartIndex)
             .ThenByDescending(match => match.Phrase.Length)
-            .FirstOrDefault();
+            .ToArray();
+    }
+
+    private static bool HasInstructionAnchor(
+        string candidate,
+        string phrase)
+    {
+        string[] candidateWords = candidate
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word.Length >= 3)
+            .ToArray();
+        string[] phraseAnchors = phrase
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(InstructionAnchorWords.Contains)
+            .ToArray();
+
+        return phraseAnchors.Any(anchor =>
+            candidateWords.Any(word => Similarity(word, anchor) >= 0.72));
     }
 
     private static CallsignMatch? FindCallsign(
         string[] tokens,
         IEnumerable<string> activeCallsigns,
         IReadOnlyDictionary<string, string> airlineAliases,
-        out IReadOnlyList<string> candidates)
+        out IReadOnlyList<string> candidates,
+        bool allowHypothesisMatch = false)
     {
         Dictionary<string, string[]> aliasesByDesignator = airlineAliases
             .Where(pair =>
@@ -325,8 +552,11 @@ public static partial class VoiceTranscriptRecovery
                                    numberSimilarity * 0.45;
 
                     if (exactNumber ||
-                        (numberSimilarity >= 0.74 &&
-                         airlineSimilarity >= 0.70))
+                        (allowHypothesisMatch
+                            ? numberSimilarity >= 0.50 &&
+                              airlineSimilarity >= 0.45
+                            : numberSimilarity >= 0.74 &&
+                              airlineSimilarity >= 0.70))
                     {
                         matches.Add(new CallsignMatch(
                             callsign,
@@ -354,7 +584,11 @@ public static partial class VoiceTranscriptRecovery
             .Select(match => match.Callsign)
             .ToArray();
 
-        if (ranked.Length == 0 || ranked[0].Score < MinimumCallsignScore)
+        double minimumScore = allowHypothesisMatch
+            ? 0.50
+            : MinimumCallsignScore;
+
+        if (ranked.Length == 0 || ranked[0].Score < minimumScore)
         {
             return null;
         }
@@ -373,48 +607,43 @@ public static partial class VoiceTranscriptRecovery
         IEnumerable<string> activeCallsigns,
         ICollection<CallsignMatch> matches)
     {
-        string? spokenRegistration = null;
-
         for (int end = 1; end <= Math.Min(tokens.Length, 7); end++)
         {
-            if (NNumberCallsignParser.TryParse(
+            if (!NNumberCallsignParser.TryParse(
                     string.Join(' ', tokens[..end]),
-                    out string parsed))
-            {
-                spokenRegistration = parsed;
-            }
-        }
-
-        if (spokenRegistration is null)
-        {
-            return;
-        }
-
-        bool mayBeAbbreviated = spokenRegistration.Length == 4;
-        string suffix = spokenRegistration[1..];
-
-        foreach (string rawCallsign in activeCallsigns)
-        {
-            string active = rawCallsign.Trim().ToUpperInvariant();
-
-            if (!NNumberCallsignParser.IsValid(active))
+                    out string spokenRegistration))
             {
                 continue;
             }
 
-            bool exact = string.Equals(
-                active,
-                spokenRegistration,
-                StringComparison.OrdinalIgnoreCase);
-            bool suffixMatch = mayBeAbbreviated &&
-                active.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+            bool mayBeAbbreviated = spokenRegistration.Length == 4;
+            string suffix = spokenRegistration[1..];
 
-            if (exact || suffixMatch)
+            foreach (string rawCallsign in activeCallsigns)
             {
-                matches.Add(new CallsignMatch(
+                string active = rawCallsign.Trim().ToUpperInvariant();
+
+                if (!NNumberCallsignParser.IsValid(active))
+                {
+                    continue;
+                }
+
+                bool exact = string.Equals(
                     active,
-                    Score: 1.0,
-                    ExactNumber: true));
+                    spokenRegistration,
+                    StringComparison.OrdinalIgnoreCase);
+                bool suffixMatch = mayBeAbbreviated &&
+                    active.EndsWith(
+                        suffix,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (exact || suffixMatch)
+                {
+                    matches.Add(new CallsignMatch(
+                        active,
+                        Score: 1.0,
+                        ExactNumber: true));
+                }
             }
         }
     }
@@ -430,13 +659,9 @@ public static partial class VoiceTranscriptRecovery
             return (remainder, false);
         }
 
-        string? spokenStar = NormalizeLooseStar(
-            match.Groups["star"].Value);
-
-        if (spokenStar is null)
-        {
-            return (remainder, false);
-        }
+        string rawSpokenStar = match.Groups["star"].Value;
+        string spokenStar = NormalizeLooseStar(rawSpokenStar) ??
+            Compact(rawSpokenStar);
 
         if (string.Equals(
                 spokenStar,
@@ -475,9 +700,38 @@ public static partial class VoiceTranscriptRecovery
 
         Match match = MangledFlightLevelPattern().Match(remainder);
 
-        return match.Success
-            ? "flight level " + match.Groups["value"].Value
-            : remainder;
+        if (match.Success)
+        {
+            return "flight level " + match.Groups["value"].Value;
+        }
+
+        int connectorIndex = new[]
+            {
+                remainder.IndexOf(" then ", StringComparison.Ordinal),
+                remainder.IndexOf(" and ", StringComparison.Ordinal)
+            }
+            .Where(index => index >= 0)
+            .DefaultIfEmpty(remainder.Length)
+            .Min();
+        string altitudeCandidate = remainder[..connectorIndex].Trim();
+
+        try
+        {
+            int possibleFlightLevel =
+                AviationNumberParser.Parse(altitudeCandidate);
+
+            if (possibleFlightLevel is >= 180 and <= 600)
+            {
+                return "flight level " + altitudeCandidate +
+                       remainder[connectorIndex..];
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Preserve the original value for the normal parser to assess.
+        }
+
+        return remainder;
     }
 
     private static string? NormalizeLooseStar(string spokenStar)
@@ -620,7 +874,7 @@ public static partial class VoiceTranscriptRecovery
         string normalized = Regex.Replace(
             value,
             @"\b(?:climate maintain|climate maintainer|" +
-            @"climbing to maintain)\b",
+            @"climbing to maintain|climb in and maintain)\b",
             "climb and maintain");
 
         normalized = Regex.Replace(
@@ -633,10 +887,139 @@ public static partial class VoiceTranscriptRecovery
             @"\baltitood\b",
             "altitude");
 
+        normalized = Regex.Replace(
+            normalized,
+            @"\bturn loft\b",
+            "turn left");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\bdescend v\b",
+            "descend via");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\bdescend via of the\b",
+            "descend via the");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\b(?:foot|put|flute) level\b",
+            "flight level");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\bfl\s*(?<value>\d{2,3})\b",
+            "flight level ${value}");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\b(?<first>\d)99er\b",
+            "${first} niner niner");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"(?<!proceed )(?<!cleared )(?<!clear )\bdirect\b",
+            "proceed direct");
+
         return Regex.Replace(
             normalized,
             @"\b(?:to send|desun) via\b",
             "descend via");
+    }
+
+    private static string SeparateLeadingAirlineNumber(string value)
+    {
+        return Regex.Replace(
+            value,
+            @"^(?<airline>[a-z]{2,})(?<number>\d{1,4})(?=\s|$)",
+            "${airline} ${number}");
+    }
+
+    private static string GetAltimeterFacility(string? controllerPosition)
+    {
+        string normalized = NormalizeWords(controllerPosition ?? string.Empty);
+        string[] words = normalized.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+
+        return words.FirstOrDefault(word =>
+                   word is not ("center" or "approach" or "departure")) ??
+               "local";
+    }
+
+    private static string ExpandBareAltimeter(
+        string instructionPhrase,
+        string remainder,
+        string? controllerPosition)
+    {
+        if (instructionPhrase == "altimeter")
+        {
+            return remainder;
+        }
+
+        const string marker = " altimeter ";
+        int index = remainder.IndexOf(
+            marker,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (index < 0)
+        {
+            return remainder;
+        }
+
+        string facility = GetAltimeterFacility(controllerPosition);
+        string canonicalFacility = $" the {facility} altimeter ";
+
+        if (remainder.Contains(
+                canonicalFacility,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return remainder;
+        }
+
+        string existingFacility = $" {facility} altimeter ";
+        int facilityIndex = remainder.IndexOf(
+            existingFacility,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (facilityIndex >= 0)
+        {
+            return remainder[..facilityIndex] +
+                   canonicalFacility +
+                   remainder[(facilityIndex + existingFacility.Length)..];
+        }
+
+        return remainder[..index] +
+               $" the {facility} altimeter " +
+               remainder[(index + marker.Length)..];
+    }
+
+    private static double FallbackCallsignScore(
+        string callsign,
+        string observedDigits,
+        bool soundsLikeNNumber,
+        string normalizedTranscript,
+        IReadOnlyDictionary<string, string> airlineAliases)
+    {
+        string callsignDigits = new(callsign.Where(char.IsDigit).ToArray());
+        double numberScore = observedDigits.Length == 0
+            ? 0
+            : Similarity(observedDigits, callsignDigits);
+        double typeScore = soundsLikeNNumber == callsign.StartsWith('N')
+            ? 0.25
+            : 0;
+        double airlineScore = airlineAliases
+            .Where(pair => callsign.StartsWith(
+                pair.Value,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(pair => Similarity(
+                normalizedTranscript.Split(' ')[0],
+                NormalizeWords(pair.Key).Split(' ')[0]))
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return numberScore * 0.55 + airlineScore * 0.30 + typeScore;
     }
 
     [GeneratedRegex(

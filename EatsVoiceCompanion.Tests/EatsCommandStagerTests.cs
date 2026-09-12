@@ -24,14 +24,15 @@ public sealed class EatsCommandStagerTests
             "OwnsWindow",
             "Activate",
             "Foreground",
-            "Escape",
+            "FocusRadio",
             "Foreground",
-            "Enter",
+            "ClearFocusedText",
             "Foreground",
             "Text:AAL123 FH270"
         ],
             input.Calls);
-        Assert.Equal(1, input.Calls.Count(call => call == "Enter"));
+        Assert.DoesNotContain("Enter", input.Calls);
+        Assert.DoesNotContain("Escape", input.Calls);
     }
 
     [Fact]
@@ -82,8 +83,8 @@ public sealed class EatsCommandStagerTests
 
     [Theory]
     [InlineData(0, false, false)]
-    [InlineData(1, true, false)]
-    [InlineData(2, true, true)]
+    [InlineData(1, false, false)]
+    [InlineData(2, false, false)]
     public async Task StageAsync_StopsIfEatsLosesFocus(
         int successfulForegroundChecks,
         bool expectedEscape,
@@ -105,6 +106,22 @@ public sealed class EatsCommandStagerTests
         Assert.DoesNotContain(
             input.Calls,
             call => call.StartsWith("Text:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StageAsync_UsesEnterWhenRadioFieldIsNotExposed()
+    {
+        FakeWindowInput input = new()
+        {
+            RadioFocusSucceeds = false
+        };
+        EatsCommandStager stager = CreateStager(input);
+
+        await stager.StageAsync(Process, "AAL123 FH270");
+
+        Assert.Contains("FocusRadio", input.Calls);
+        Assert.Contains("Enter", input.Calls);
+        Assert.Equal("Text:AAL123 FH270", input.Calls[^1]);
     }
 
     [Fact]
@@ -133,6 +150,8 @@ public sealed class EatsCommandStagerTests
 
         public int SuccessfulForegroundChecks { get; init; } = int.MaxValue;
 
+        public bool RadioFocusSucceeds { get; init; } = true;
+
         public bool IsWindowOwnedByProcess(
             nint windowHandle,
             int processId)
@@ -156,6 +175,17 @@ public sealed class EatsCommandStagerTests
         public void SendEscape()
         {
             Calls.Add("Escape");
+        }
+
+        public void ClearFocusedText()
+        {
+            Calls.Add("ClearFocusedText");
+        }
+
+        public bool FocusRadioCommandField(nint windowHandle)
+        {
+            Calls.Add("FocusRadio");
+            return RadioFocusSucceeds;
         }
 
         public void SendEnter()

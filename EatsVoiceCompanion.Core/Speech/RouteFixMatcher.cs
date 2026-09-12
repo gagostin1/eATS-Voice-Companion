@@ -4,6 +4,53 @@ public static class RouteFixMatcher
 {
     private const double MinimumSimilarity = 0.72;
     private const double MinimumWinnerMargin = 0.12;
+    private static readonly IReadOnlyDictionary<string, string>
+        SpokenCharacters = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            ["alpha"] = "a",
+            ["bravo"] = "b",
+            ["charlie"] = "c",
+            ["delta"] = "d",
+            ["echo"] = "e",
+            ["foxtrot"] = "f",
+            ["golf"] = "g",
+            ["hotel"] = "h",
+            ["india"] = "i",
+            ["juliet"] = "j",
+            ["kilo"] = "k",
+            ["lima"] = "l",
+            ["mike"] = "m",
+            ["november"] = "n",
+            ["oscar"] = "o",
+            ["papa"] = "p",
+            ["quebec"] = "q",
+            ["romeo"] = "r",
+            ["sierra"] = "s",
+            ["tango"] = "t",
+            ["uniform"] = "u",
+            ["victor"] = "v",
+            ["whiskey"] = "w",
+            ["xray"] = "x",
+            ["yankee"] = "y",
+            ["zulu"] = "z",
+            ["zee"] = "z",
+            ["zed"] = "z",
+            ["eye"] = "i",
+            ["oh"] = "o",
+            ["zero"] = "0",
+            ["one"] = "1",
+            ["two"] = "2",
+            ["three"] = "3",
+            ["tree"] = "3",
+            ["four"] = "4",
+            ["five"] = "5",
+            ["six"] = "6",
+            ["seven"] = "7",
+            ["eight"] = "8",
+            ["nine"] = "9",
+            ["niner"] = "9"
+        };
 
     public static string? FindUniqueMatch(
         string spokenFix,
@@ -60,6 +107,20 @@ public static class RouteFixMatcher
 
     private static string Normalize(string value)
     {
+        string[] tokens = value
+            .ToLowerInvariant()
+            .Split(
+                [' ', '-', '.', ',', '/'],
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries);
+
+        if (tokens.Length > 1 &&
+            tokens.All(token => SpokenCharacters.ContainsKey(token)))
+        {
+            return string.Concat(tokens.Select(token =>
+                SpokenCharacters[token]));
+        }
+
         return new string(value
             .ToLowerInvariant()
             .Where(char.IsLetterOrDigit)

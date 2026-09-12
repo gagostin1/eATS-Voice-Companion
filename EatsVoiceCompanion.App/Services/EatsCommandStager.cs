@@ -10,6 +10,10 @@ public interface IEatsWindowInput
 
     bool IsForeground(nint windowHandle);
 
+    bool FocusRadioCommandField(nint windowHandle);
+
+    void ClearFocusedText();
+
     void SendEscape();
 
     void SendEnter();
@@ -71,15 +75,21 @@ public sealed class EatsCommandStager
         await WaitForInputAsync(cancellationToken);
         EnsureForeground(process.MainWindowHandle);
 
-        // Escape safely clears any incomplete entry. The first Enter moves
-        // eATS from its data-block command box into the radio-command field.
-        // A final Enter is intentionally never sent: transmission remains a
-        // deliberate controller action after visual inspection in eATS.
-        _windowInput.SendEscape();
+        // Focus the radio field before clearing it. Clearing first could act
+        // on the upper data-block field and then append to an existing radio
+        // command after focus moves to the lower field.
+        if (!_windowInput.FocusRadioCommandField(process.MainWindowHandle))
+        {
+            _windowInput.SendEscape();
+
+            await WaitForInputAsync(cancellationToken);
+            EnsureForeground(process.MainWindowHandle);
+            _windowInput.SendEnter();
+        }
 
         await WaitForInputAsync(cancellationToken);
         EnsureForeground(process.MainWindowHandle);
-        _windowInput.SendEnter();
+        _windowInput.ClearFocusedText();
 
         await WaitForInputAsync(cancellationToken);
         EnsureForeground(process.MainWindowHandle);

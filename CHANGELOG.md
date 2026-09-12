@@ -8,6 +8,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- Ranked, scenario-constrained command hypotheses that automatically stage the highest-ranked valid command; non-empty speech with active-aircraft context always falls back to a valid command for the best-matched aircraft
+- Best-hypothesis recovery for close active flight numbers, dropped flight-level wording, and individually spoken waypoint characters
 - A configurable non-exclusive system-wide hold-to-record hotkey, including modifier-only assignments, Settings capture, persistence, key-repeat protection, TeamSpeak passthrough, and an on-screen recording fallback
 - A modern three-tab interface that prioritizes voice operation while separating manual command generation and connection/audio settings
 - Optional automatic staging of freshly verified voice and manual commands, while retaining the controller's final Enter action
@@ -21,7 +23,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - The higher-accuracy Whisper `small.en` model replaces `base.en` for callsign and ATC phrase recognition
 - A command catalog documenting supported mappings, safety constraints, and planned command groups
 - Editable transcripts with an **Interpret again** workflow that does not require rerecording
-- Ambiguous active-callsign suggestions that remain fail-closed until the controller corrects the transcript
+- Deterministic best-match selection for ambiguous active callsigns, instructions, and incomplete commands
 - A generated, scenario-independent recognition matrix covering varied airlines, flight numbers, controller positions, STARs, command families, and recovery cases through the production interpreter
 - Published-speed compliance at a named fix using canonical `CWS@FIX` output, descend-via context enforcement, safe ordering, speech parsing, and manual preview support
 - Pilot's-discretion descent, expedite-current, expedite-through/to-altitude, report-leaving/reaching-altitude, and say-altitude commands with speech, editor, allowlist, ordering, and scenario-matrix coverage
@@ -35,10 +37,13 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Fixed
 
+- Bare altimeter readouts now use the configured controller facility, and valid altimeters following another instruction remain in the combined staged command
+- Staging explicitly focuses the lower eATS radio field before selecting and deleting existing text, preventing commands from being appended or an active upper-right data-block prompt from receiving the new command
+- Live-context recovery now handles compact airline callsigns such as `AMERICAN1401`, common N-number transcriptions such as `Julia Charley`, `foot level`, and assigned STAR spellings such as `JONES Z5` for `JONZE5`
 - Voice results keep a compact, stable layout instead of expanding the page with recording paths and repeated recovery/staging text
 - Settings are vertically grouped beneath a persistent global save bar that clearly applies to every settings section
 - Airline entries with trailing flight-number ranges, including Blue Streak, Endeavor, Piedmont, Brickyard, and SkyWest, are now loaded from `Airlines.txt`
-- Stale snapshots retain non-authoritative callsign context for best-effort preview recovery while staging remains disabled
+- Stale snapshots retain non-authoritative callsign context for best-effort voice selection and staging
 - Mixed word/digit altitude transcripts such as `one 3,000` are normalized without accepting ambiguous cardinal wording
 - `cleared direct` and common `clear direct` transcriptions are recognized as proceed-direct instructions
 

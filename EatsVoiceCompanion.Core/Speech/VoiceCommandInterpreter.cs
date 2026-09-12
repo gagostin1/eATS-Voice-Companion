@@ -1,9 +1,12 @@
+using EatsVoiceCompanion.Core.Commands;
+
 namespace EatsVoiceCompanion.Core.Speech;
 
 public enum VoiceInterpretationKind
 {
     Strict,
-    Recovered
+    Recovered,
+    BestHypothesis
 }
 
 public sealed record VoiceCommandInterpretation(
@@ -12,7 +15,9 @@ public sealed record VoiceCommandInterpretation(
     string InterpretedTranscript,
     string? RecoveredInstructionPhrase = null,
     bool StarWasCorrected = false,
-    bool RouteFixWasCorrected = false);
+    bool RouteFixWasCorrected = false,
+    double ConfidenceScore = 1.0,
+    int ValidHypothesisCount = 1);
 
 public sealed class VoiceInterpretationException : InvalidOperationException
 {
@@ -51,46 +56,58 @@ public sealed class VoiceCommandInterpreter
         ArgumentNullException.ThrowIfNull(activeCallsigns);
         ArgumentNullException.ThrowIfNull(activeStars);
 
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            throw new ArgumentException(
+                "No speech was recognized.",
+                nameof(transcript));
+        }
+
+        try
+        {
+            return InterpretCore(
+                transcript,
+                controllerPosition,
+                activeCallsigns,
+                activeStars,
+                activeRouteFixes);
+        }
+        catch (Exception exception)
+            when (activeCallsigns.Count > 0 &&
+                  exception is ArgumentException or InvalidOperationException)
+        {
+            return CreateForcedFallback(transcript, activeCallsigns);
+        }
+    }
+
+    private VoiceCommandInterpretation InterpretCore(
+        string transcript,
+        string? controllerPosition,
+        IReadOnlySet<string> activeCallsigns,
+        IReadOnlyDictionary<string, string> activeStars,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? activeRouteFixes)
+    {
+        ArgumentNullException.ThrowIfNull(activeCallsigns);
+        ArgumentNullException.ThrowIfNull(activeStars);
+
         ParsedVoiceCommand parsed;
 
         try
         {
             parsed = _parser.Parse(transcript, controllerPosition);
+            _ = EatsTransmissionValidator.Validate(parsed.ToEatsCommand());
         }
         catch (Exception exception)
             when (exception is ArgumentException or
                 InvalidOperationException)
         {
-            VoiceTranscriptRecoveryResult? recovery =
-                VoiceTranscriptRecovery.TryRecover(
-                    transcript,
-                    activeCallsigns,
-                    _airlineAliases,
-                    activeStars);
-
-            if (recovery is null)
-            {
-                IReadOnlyList<string> candidates =
-                    VoiceTranscriptRecovery.SuggestCallsigns(
-                        transcript,
-                        activeCallsigns,
-                        _airlineAliases);
-
-                string message = candidates.Count == 0
-                    ? exception.Message
-                    : exception.Message + " Possible active callsigns: " +
-                      string.Join(", ", candidates) + ".";
-
-                throw new VoiceInterpretationException(
-                    message,
-                    candidates,
-                    exception);
-            }
-
-            parsed = _parser.Parse(recovery.RecoveredTranscript);
-            return ApplyRouteFixContext(
-                Recovered(parsed, recovery),
-                activeRouteFixes);
+            return InterpretBestHypothesisOrThrow(
+                transcript,
+                controllerPosition,
+                activeCallsigns,
+                activeStars,
+                activeRouteFixes,
+                exception);
         }
 
         if (IsUnmatchedAbbreviatedNNumber(parsed, activeCallsigns))
@@ -127,12 +144,30 @@ public sealed class VoiceCommandInterpreter
                     "active aircraft.",
                     nameof(transcript));
 
-                throw new VoiceInterpretationException(
-                    cause.Message + " Possible active callsigns: " +
-                    string.Join(", ", candidates) + ".",
-                    candidates,
+                return InterpretBestHypothesisOrThrow(
+                    transcript,
+                    controllerPosition,
+                    activeCallsigns,
+                    activeStars,
+                    activeRouteFixes,
                     cause);
             }
+        }
+
+        if (activeCallsigns.Count > 0 &&
+            !activeCallsigns.Contains(parsed.Callsign))
+        {
+            ArgumentException cause = new(
+                $"The recognized callsign '{parsed.Callsign}' is not active.",
+                nameof(transcript));
+
+            return InterpretBestHypothesisOrThrow(
+                transcript,
+                controllerPosition,
+                activeCallsigns,
+                activeStars,
+                activeRouteFixes,
+                cause);
         }
 
         if (HasFuzzyNamedStarMismatch(parsed, activeStars))
@@ -159,6 +194,257 @@ public sealed class VoiceCommandInterpreter
                 VoiceInterpretationKind.Strict,
                 transcript),
             activeRouteFixes);
+    }
+
+    private VoiceCommandInterpretation CreateForcedFallback(
+        string transcript,
+        IReadOnlySet<string> activeCallsigns)
+    {
+        string fallbackCallsign =
+            VoiceTranscriptRecovery.SelectBestActiveCallsign(
+                transcript,
+                activeCallsigns,
+                _airlineAliases)!;
+        ParsedVoiceCommand fallback = _parser.Parse(
+            $"{fallbackCallsign} roger");
+
+        return new VoiceCommandInterpretation(
+            fallback,
+            VoiceInterpretationKind.BestHypothesis,
+            $"{fallbackCallsign} roger",
+            "roger",
+            ConfidenceScore: 0,
+            ValidHypothesisCount: 0);
+    }
+
+    private VoiceCommandInterpretation InterpretBestHypothesisOrThrow(
+        string transcript,
+        string? controllerPosition,
+        IReadOnlySet<string> activeCallsigns,
+        IReadOnlyDictionary<string, string> activeStars,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? activeRouteFixes,
+        Exception originalException)
+    {
+        IReadOnlyList<VoiceTranscriptHypothesis> hypotheses =
+            VoiceTranscriptRecovery.GenerateHypotheses(
+                transcript,
+                activeCallsigns,
+                _airlineAliases,
+                activeStars,
+                controllerPosition);
+        VoiceTranscriptRecoveryResult? conservativeRecovery =
+            VoiceTranscriptRecovery.TryRecover(
+                transcript,
+                activeCallsigns,
+                _airlineAliases,
+                activeStars);
+        List<ScoredInterpretation> valid = new();
+
+        foreach (VoiceTranscriptHypothesis hypothesis in hypotheses)
+        {
+            try
+            {
+                string candidateTranscript = hypothesis.RecoveredTranscript;
+                ParsedVoiceCommand candidate;
+                bool hypothesisFixWasCorrected = false;
+
+                try
+                {
+                    candidate = _parser.Parse(candidateTranscript);
+                }
+                catch (Exception exception)
+                    when (exception is ArgumentException or
+                        InvalidOperationException)
+                {
+                    string withoutInvalidTail =
+                        TruncateInvalidTrailingInstruction(
+                            candidateTranscript);
+
+                    if (!string.Equals(
+                            withoutInvalidTail,
+                            candidateTranscript,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        candidateTranscript = withoutInvalidTail;
+                        candidate = _parser.Parse(candidateTranscript);
+                        goto CandidateParsed;
+                    }
+
+                    candidateTranscript = CorrectHypothesisFixText(
+                        hypothesis,
+                        activeRouteFixes);
+                    hypothesisFixWasCorrected = !string.Equals(
+                        candidateTranscript,
+                        hypothesis.RecoveredTranscript,
+                        StringComparison.OrdinalIgnoreCase);
+
+                    if (!hypothesisFixWasCorrected)
+                    {
+                        throw;
+                    }
+
+                    candidate = _parser.Parse(candidateTranscript);
+                }
+
+            CandidateParsed:
+                _ = EatsTransmissionValidator.Validate(
+                    candidate.ToEatsCommand());
+                bool isConservativeRecovery = conservativeRecovery is not null &&
+                    string.Equals(
+                        hypothesis.RecoveredTranscript,
+                        conservativeRecovery.RecoveredTranscript,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        candidateTranscript,
+                        hypothesis.RecoveredTranscript,
+                        StringComparison.OrdinalIgnoreCase);
+                VoiceCommandInterpretation interpretation =
+                    ApplyRouteFixContext(
+                        new VoiceCommandInterpretation(
+                            candidate,
+                            isConservativeRecovery
+                                ? VoiceInterpretationKind.Recovered
+                                : VoiceInterpretationKind.BestHypothesis,
+                            candidateTranscript,
+                            hypothesis.InstructionPhrase,
+                            hypothesis.StarWasCorrected,
+                            RouteFixWasCorrected:
+                                hypothesisFixWasCorrected,
+                            ConfidenceScore: hypothesis.Score),
+                        activeRouteFixes);
+
+                valid.Add(new ScoredInterpretation(
+                    interpretation,
+                    hypothesis.Score));
+            }
+            catch (Exception exception)
+                when (exception is ArgumentException or
+                    InvalidOperationException)
+            {
+                // Invalid hypotheses are discarded before ranking.
+            }
+        }
+
+        ScoredInterpretation[] ranked = valid
+            .GroupBy(item => item.Interpretation.Command.ToEatsCommand())
+            .Select(group => group.MaxBy(item => item.Score)!)
+            .OrderByDescending(item => item.Score)
+            .ToArray();
+
+        if (ranked.Length > 0)
+        {
+            return ranked[0].Interpretation with
+            {
+                ValidHypothesisCount = ranked.Length
+            };
+        }
+
+        string? fallbackCallsign =
+            VoiceTranscriptRecovery.SelectBestActiveCallsign(
+                transcript,
+                activeCallsigns,
+                _airlineAliases);
+
+        if (fallbackCallsign is not null)
+        {
+            ParsedVoiceCommand fallback = _parser.Parse(
+                $"{fallbackCallsign} roger");
+
+            return new VoiceCommandInterpretation(
+                fallback,
+                VoiceInterpretationKind.BestHypothesis,
+                $"{fallbackCallsign} roger",
+                "roger",
+                ConfidenceScore: 0,
+                ValidHypothesisCount: 0);
+        }
+
+        IReadOnlyList<string> candidates = Array.Empty<string>();
+        string message = originalException.Message;
+
+        if (candidates.Count > 0)
+        {
+            message += " Possible active callsigns: " +
+                       string.Join(", ", candidates) + ".";
+        }
+
+        throw new VoiceInterpretationException(
+            message,
+            candidates,
+            originalException);
+    }
+
+    private static string CorrectHypothesisFixText(
+        VoiceTranscriptHypothesis hypothesis,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? activeRouteFixes)
+    {
+        if (activeRouteFixes is null ||
+            !activeRouteFixes.TryGetValue(
+                hypothesis.Callsign,
+                out IReadOnlySet<string>? routeFixes) ||
+            routeFixes.Count == 0)
+        {
+            return hypothesis.RecoveredTranscript;
+        }
+
+        string prefix =
+            $"{hypothesis.Callsign} {hypothesis.InstructionPhrase}";
+        string remainder = hypothesis.RecoveredTranscript[prefix.Length..]
+            .Trim();
+        string observedFix;
+        string suffix;
+
+        if (hypothesis.InstructionPhrase.Contains(
+                "direct",
+                StringComparison.Ordinal))
+        {
+            int connector = remainder.IndexOf(
+                " then ",
+                StringComparison.Ordinal);
+            observedFix = connector < 0
+                ? remainder
+                : remainder[..connector];
+            suffix = connector < 0 ? string.Empty : remainder[connector..];
+        }
+        else if (hypothesis.InstructionPhrase == "cross")
+        {
+            int atIndex = remainder.IndexOf(" at ", StringComparison.Ordinal);
+
+            if (atIndex < 0 ||
+                remainder[..atIndex].Contains(
+                    " miles ",
+                    StringComparison.Ordinal))
+            {
+                return hypothesis.RecoveredTranscript;
+            }
+
+            observedFix = remainder[..atIndex];
+            suffix = remainder[atIndex..];
+        }
+        else
+        {
+            return hypothesis.RecoveredTranscript;
+        }
+
+        string? matchedFix = RouteFixMatcher.FindUniqueMatch(
+            observedFix,
+            routeFixes);
+
+        return matchedFix is null
+            ? hypothesis.RecoveredTranscript
+            : $"{prefix} {matchedFix}{suffix}";
+    }
+
+    private static string TruncateInvalidTrailingInstruction(
+        string candidateTranscript)
+    {
+        int altimeter = candidateTranscript.IndexOf(
+            " altimeter ",
+            StringComparison.OrdinalIgnoreCase);
+
+        return altimeter > 0
+            ? candidateTranscript[..altimeter].Trim()
+            : candidateTranscript;
     }
 
     private static VoiceCommandInterpretation ApplyRouteFixContext(
@@ -220,7 +506,9 @@ public sealed class VoiceCommandInterpreter
         return interpretation with
         {
             Command = new ParsedVoiceCommand(command.Callsign, instructions),
-            Kind = VoiceInterpretationKind.Recovered,
+            Kind = interpretation.Kind == VoiceInterpretationKind.Strict
+                ? VoiceInterpretationKind.Recovered
+                : interpretation.Kind,
             RouteFixWasCorrected = true
         };
     }
@@ -276,4 +564,8 @@ public sealed class VoiceCommandInterpreter
                    assignedStar,
                    StringComparison.OrdinalIgnoreCase);
     }
+
+    private sealed record ScoredInterpretation(
+        VoiceCommandInterpretation Interpretation,
+        double Score);
 }

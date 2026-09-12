@@ -510,8 +510,13 @@ public partial class MainWindow : Window
                 PreviewText.Text);
             string callsign = transmission.Split(' ')[0];
             UpdateCommandSafetyStatus(callsign);
+            bool forceBestEffortVoiceStage = string.Equals(
+                source,
+                "voice recognition",
+                StringComparison.Ordinal);
 
-            if (_currentSafetyState != CommandSafetyState.Verified)
+            if (_currentSafetyState != CommandSafetyState.Verified &&
+                !forceBestEffortVoiceStage)
             {
                 CommandStageStatusText.Foreground = Brushes.Firebrick;
                 CommandStageStatusText.Text =
@@ -534,8 +539,10 @@ public partial class MainWindow : Window
             SaveSettingsButton.IsEnabled = false;
             GenerateCommandButton.IsEnabled = false;
             CommandStageStatusText.Foreground = Brushes.DarkGoldenrod;
-            CommandStageStatusText.Text =
-                "Verified command ready. Staging it in eATS...";
+            CommandStageStatusText.Text = forceBestEffortVoiceStage &&
+                _currentSafetyState != CommandSafetyState.Verified
+                ? "Best-effort voice command ready. Staging it in eATS..."
+                : "Verified command ready. Staging it in eATS...";
 
             await _commandStager.StageAsync(
                 process,
@@ -552,7 +559,7 @@ public partial class MainWindow : Window
 
             _logger.Information(
                 "CommandStaged",
-                "A verified command was staged without transmission.",
+                "A command was staged without transmission.",
                 new { process.ProcessId, Source = source });
         }
         catch (OperationCanceledException)
@@ -572,7 +579,7 @@ public partial class MainWindow : Window
 
             _logger.Error(
                 "CommandStagingFailed",
-                "A verified command could not be staged.",
+                "A command could not be staged.",
                 exception);
         }
         finally
@@ -1181,7 +1188,7 @@ public partial class MainWindow : Window
             ApplyParsedCommandToEditor(parsed);
             PreviewText.Text = transmission;
             _currentPreviewWasRecovered =
-                interpretation.Kind == VoiceInterpretationKind.Recovered;
+                interpretation.Kind != VoiceInterpretationKind.Strict;
             ConfigureRouteRequirement(
                 transmission,
                 GetSpokenStar(parsed));
@@ -1195,9 +1202,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                SpeechStatusText.Text =
-                    "Best-effort interpretation generated. Review the " +
-                    "transcript and command carefully.";
+                SpeechStatusText.Text = interpretation.Kind ==
+                    VoiceInterpretationKind.BestHypothesis
+                    ? $"Best command hypothesis generated " +
+                      $"({interpretation.ConfidenceScore:P0}). Review it carefully."
+                    : "Best-effort interpretation generated. Review the " +
+                      "transcript and command carefully.";
 
                 _logger.Warning(
                     "VoiceTranscriptRecovered",
@@ -1206,7 +1216,10 @@ public partial class MainWindow : Window
                     {
                         interpretation.RecoveredInstructionPhrase,
                         interpretation.StarWasCorrected,
-                        interpretation.RouteFixWasCorrected
+                        interpretation.RouteFixWasCorrected,
+                        interpretation.Kind,
+                        interpretation.ConfidenceScore,
+                        interpretation.ValidHypothesisCount
                     });
             }
         }

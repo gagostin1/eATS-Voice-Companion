@@ -236,21 +236,19 @@ public sealed class VoiceCommandInterpreterTests
     }
 
     [Fact]
-    public void Interpret_RejectsAmbiguousAbbreviatedNNumber()
+    public void Interpret_ChoosesAmbiguousAbbreviatedNNumber()
     {
-        VoiceInterpretationException exception = Assert.Throws<
-            VoiceInterpretationException>(
-                () => new VoiceCommandInterpreter(Aliases).Interpret(
-                    "November three niner romeo fly heading two seven zero",
-                    null,
-                    new HashSet<string>(
-                        ["N6839R", "N1239R"],
-                        StringComparer.OrdinalIgnoreCase),
-                    new Dictionary<string, string>()));
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "November three niner romeo fly heading two seven zero",
+                null,
+                new HashSet<string>(
+                    ["N6839R", "N1239R"],
+                    StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>());
 
-        Assert.Equal(
-            new[] { "N6839R", "N1239R" },
-            exception.CandidateCallsigns);
+        Assert.Equal("N1239R FH270", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
     }
 
     [Fact]
@@ -354,24 +352,22 @@ public sealed class VoiceCommandInterpreterTests
     }
 
     [Fact]
-    public void Interpret_ReportsCandidatesWhenRecoveryIsAmbiguous()
+    public void Interpret_ChoosesHighestRankedCallsignWhenAmbiguous()
     {
         IReadOnlySet<string> activeCallsigns =
             new HashSet<string>(
                 ["JIA5595", "JIA5597"],
                 StringComparer.OrdinalIgnoreCase);
 
-        VoiceInterpretationException exception = Assert.Throws<
-            VoiceInterpretationException>(() =>
-                new VoiceCommandInterpreter(Aliases).Interpret(
-                    "Blue Streek 5596 climate maintain flight level 230",
-                    "Atlanta Center",
-                    activeCallsigns,
-                    new Dictionary<string, string>()));
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Blue Streek 5596 climate maintain flight level 230",
+                "Atlanta Center",
+                activeCallsigns,
+                new Dictionary<string, string>());
 
-        Assert.Equal(2, exception.CandidateCallsigns.Count);
-        Assert.Contains("JIA5595", exception.Message);
-        Assert.Contains("JIA5597", exception.Message);
+        Assert.Equal("JIA5595 CM230", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
     }
 
     [Fact]
@@ -418,11 +414,10 @@ public sealed class VoiceCommandInterpreterTests
     }
 
     [Fact]
-    public void Interpret_BlocksUnmatchedFixWhenAircraftRouteIsAvailable()
+    public void Interpret_FallsBackWhenFixCannotBeMatched()
     {
-        VoiceInterpretationException exception = Assert.Throws<
-            VoiceInterpretationException>(() =>
-                new VoiceCommandInterpreter(Aliases).Interpret(
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
                     "Delta 688 proceed direct unknown",
                     null,
                     new HashSet<string>(["DAL688"]),
@@ -432,17 +427,16 @@ public sealed class VoiceCommandInterpreterTests
                         ["DAL688"] = new HashSet<string>(
                             ["DGESS", "OZZZI", "HAARY"],
                             StringComparer.OrdinalIgnoreCase)
-                    }));
+                    });
 
-        Assert.Contains("could not be matched uniquely", exception.Message);
+        Assert.Equal("DAL688 R", result.Command.ToEatsCommand());
     }
 
     [Fact]
-    public void Interpret_BlocksAmbiguousPhoneticRouteFix()
+    public void Interpret_FallsBackWhenRouteFixIsAmbiguous()
     {
-        VoiceInterpretationException exception = Assert.Throws<
-            VoiceInterpretationException>(() =>
-                new VoiceCommandInterpreter(Aliases).Interpret(
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
                     "Delta 688 proceed direct Aussie",
                     null,
                     new HashSet<string>(["DAL688"]),
@@ -452,8 +446,233 @@ public sealed class VoiceCommandInterpreterTests
                         ["DAL688"] = new HashSet<string>(
                             ["OZZZI", "OSSEY"],
                             StringComparer.OrdinalIgnoreCase)
-                    }));
+                    });
 
-        Assert.Contains("could not be matched uniquely", exception.Message);
+        Assert.Equal("DAL688 R", result.Command.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Interpret_ProducesBestHypothesisForSingleAircraft()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "garbled aircraft fly hedding two seven zero",
+                null,
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 FH270", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+        Assert.InRange(result.ConfidenceScore, 0.40, 1.0);
+    }
+
+    [Fact]
+    public void Interpret_UsesSpokenCharactersForRouteFixHypothesis()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Delta 688 direct oh zee zee zee eye",
+                null,
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>(),
+                new Dictionary<string, IReadOnlySet<string>>
+                {
+                    ["DAL688"] = new HashSet<string>(
+                        ["DGESS", "OZZZI", "HAARY"],
+                        StringComparer.OrdinalIgnoreCase)
+                });
+
+        Assert.Equal("DAL688 ..OZZZI", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+        Assert.True(result.RouteFixWasCorrected);
+    }
+
+    [Fact]
+    public void Interpret_ChoosesTopTiedDirectionHypothesis()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                    "Delta 688 turn heading two seven zero",
+                    null,
+                    new HashSet<string>(["DAL688"]),
+                    new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 TLH270", result.Command.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Interpret_UsesActiveContextToCorrectFlightNumberHypothesis()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Delta 680 fly heading two seven zero",
+                null,
+                new HashSet<string>(["DAL688", "AAL123"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 FH270", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+    }
+
+    [Fact]
+    public void Interpret_FallsBackWhenMandatoryValueIsMissing()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                    "Delta 688 climb and maintain",
+                    null,
+                    new HashSet<string>(["DAL688"]),
+                    new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 R", result.Command.ToEatsCommand());
+    }
+
+    [Theory]
+    [InlineData("Delta 688 climb and maintain 230")]
+    [InlineData("Delta 688 climb and maintain two three zero")]
+    public void Interpret_InfersDroppedFlightLevelWordsWhenUnambiguous(
+        string transcript)
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                transcript,
+                null,
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 CM230", result.Command.ToEatsCommand());
+        Assert.NotEqual(VoiceInterpretationKind.Strict, result.Kind);
+    }
+
+    [Theory]
+    [InlineData(
+        "November 4, 7-5, Julia Charley, Atlanta Center, " +
+        "CLIMB AND MAINTAIN, FOOT LEVEL 2-3-0.",
+        "N475JC CM230")]
+    [InlineData(
+        "November 4, 7-5, Juliet Charlie, climb and maintain " +
+        "flight level 2-3-0.",
+        "N475JC CM230")]
+    [InlineData(
+        "November 5-0-8, Julia Papa, Atlanta Center, Climb and " +
+        "Maintain, Flight Level 2-4-0.",
+        "N508JP CM240")]
+    public void Interpret_RecoversLiveNNumberTranscriptions(
+        string transcript,
+        string expectedCommand)
+    {
+        string activeCallsign = expectedCommand.Split(' ')[0];
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                transcript,
+                "Atlanta Center",
+                new HashSet<string>([activeCallsign]),
+                new Dictionary<string, string>());
+
+        Assert.Equal(expectedCommand, result.Command.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Interpret_RecoversCompactAirlineAndContextualStar()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "AMERICAN1401 AT LINA CENTER, DESCEND VIA THE " +
+                "JONES Z5 ARRIVAL.",
+                "Atlanta Center",
+                new HashSet<string>(["AAL1401"]),
+                new Dictionary<string, string>
+                {
+                    ["AAL1401"] = "JONZE5"
+                });
+
+        Assert.Equal("AAL1401 DV", result.Command.ToEatsCommand());
+        Assert.True(result.StarWasCorrected);
+        Assert.NotEqual(VoiceInterpretationKind.Strict, result.Kind);
+    }
+
+    [Theory]
+    [InlineData("American 1395, Altimeter 299er-7.")]
+    [InlineData("American 1395, Altimeter 2, Niner, Niner 7.")]
+    public void Interpret_RecoversBareAltimeterUsingControllerFacility(
+        string transcript)
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                transcript,
+                "Atlanta Center",
+                new HashSet<string>(["AAL1395"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("AAL1395 A2997", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+    }
+
+    [Fact]
+    public void Interpret_AlwaysReturnsCommandForNonEmptySpeechWithContext()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "completely unusable speech",
+                "Atlanta Center",
+                new HashSet<string>(["DAL688"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("DAL688 R", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+        Assert.Equal(0, result.ConfidenceScore);
+    }
+
+    [Theory]
+    [InlineData(
+        "November 9, 2656, Atlanta Center, Climate Maintain, FL240.")]
+    [InlineData(
+        "November 9, 2656, Atlanta Center, Climb in and maintain FL240.")]
+    public void Interpret_UsesBestActiveNNumberForMalformedRegistration(
+        string transcript)
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                transcript,
+                "Atlanta Center",
+                new HashSet<string>(["N9265S", "AAL1395"]),
+                new Dictionary<string, string>());
+
+        Assert.Equal("N9265S CM240", result.Command.ToEatsCommand());
+        Assert.Equal(VoiceInterpretationKind.BestHypothesis, result.Kind);
+    }
+
+    [Fact]
+    public void Interpret_RecoversCompactCombinedDescendViaAndAltimeter()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "American1362, Atlanta Center, descend via the Jonesy " +
+                "5 arrival, Altimeter 2, Niner, Niner 7.",
+                "Atlanta Center",
+                new HashSet<string>(["AAL1362"]),
+                new Dictionary<string, string>
+                {
+                    ["AAL1362"] = "JONZE5"
+                });
+
+        Assert.Equal("AAL1362 DV A2997", result.Command.ToEatsCommand());
+    }
+
+    [Fact]
+    public void Interpret_RecoversDescendVWithCombinedAltimeter()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "BLUESTREAK5143 ATLANTAS CENTER, DESCEND V of the " +
+                "JOHNSY5 ARRIVAL, ATLANTA, ALTIMETER, 2976.",
+                "Atlanta Center",
+                new HashSet<string>(["JIA5143"]),
+                new Dictionary<string, string>
+                {
+                    ["JIA5143"] = "JONZE5"
+                });
+
+        Assert.Equal("JIA5143 DV A2976", result.Command.ToEatsCommand());
     }
 }

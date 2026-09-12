@@ -24,9 +24,10 @@ The current workflow records a controller transmission, transcribes it locally w
 - Supports pilot's-discretion descent, expedite, report-leaving/reaching, and say-altitude instructions
 - Supports transponder code, IDENT, altitude-reporting, normal, standby, and VFR instructions
 - Adds active airline and N-number callsigns, STARs, and a bounded set of current route fixes to the speech-recognition prompt
-- Attempts a clearly labeled, constrained best-effort interpretation when raw transcription cannot be parsed, using only active eATS callsigns, supported instruction phrases, assigned STARs, and aircraft-specific route-fix context
+- Generates and ranks complete command hypotheses when raw transcription cannot be parsed, using active eATS callsigns, supported instruction phrases, assigned STARs, aircraft-specific route fixes, and command-value validation
+- Automatically stages a uniquely highest-ranked valid voice hypothesis for review while continuing to leave the final Enter action to the controller
 - Lets the controller correct an imperfect transcript and interpret it again without making another recording
-- Reports likely active callsigns when a fuzzy callsign remains ambiguous instead of choosing one silently
+- Chooses the highest-ranked active callsign when speech remains ambiguous so every non-empty recording can produce a command
 - Supports an optional controller position in transmissions, such as `American 1307, Atlanta Center, ...`
 - Converts single or combined recognized instructions into editable eATS command previews
 - Detects a running eATS process and displays basic process information
@@ -135,11 +136,13 @@ Transponder assignments require exactly four separately spoken octal digits (`0`
 
 Cross-distance restrictions require 1-999 miles, an eight-point compass direction, a full 2-8 character fix identifier, and an altitude. Only one can appear in a preview. A later direct command is rejected because eATS would remove the cross-distance restriction. During voice interpretation, fix-bearing commands use the matched aircraft's generated flight plan and assigned STAR to retain exact identifiers or correct a uniquely similar transcription. An unmatched or ambiguous spoken fix is rejected when that route context is available. Manual commands can still use off-route fixes, and route geometry remains controller-verified.
 
-If strict parsing fails, the companion may display a **Best-effort interpretation generated** warning. Recovery is limited to a uniquely matched active callsign, a sufficiently similar supported instruction phrase, and—when applicable—a sufficiently similar assigned STAR or aircraft-specific route fix. Ambiguous callsigns, fixes, and unsupported instructions remain rejected; when useful, the error lists likely active callsigns for the controller to compare. The recovered wording is displayed beneath the original transcript and must be reviewed before staging. The transcript itself can also be corrected and submitted with **Interpret again** without rerecording. Callsigns from a stale snapshot may assist recovery, but the resulting preview remains amber and cannot be staged until fresh context is available.
+If strict parsing fails, the companion generates multiple scenario-constrained hypotheses, runs each through the normal parser and final eATS command validator, removes incomplete or invalid results, and ranks the remaining distinct commands. A clear winner is displayed as a **Best command hypothesis** with its confidence score and automatically follows the normal stage-only workflow. Recovery can use a uniquely matched active callsign, a similar supported instruction phrase, an assigned STAR, an aircraft-specific route fix, spelled waypoint characters, and validated numeric values. It can also infer a dropped `flight level` phrase when a climb/descent value from 180 through 600 cannot represent a valid altitude in feet.
+
+Empty audio remains ignored. For every non-empty recording with active-aircraft context, the voice workflow chooses the highest-ranked valid interpretation even when callsigns or instructions are tied. If no requested instruction can be made syntactically valid, it stages a `roger` command for the best-matched active aircraft rather than producing no command. Voice commands are staged even when snapshot verification is stale; manual generation retains its verification gate. The raw transcript and generated preview remain visible for controller review, and **Interpret again** allows correction without rerecording. The application still never presses the final Enter key.
 
 Altitude parsing accepts standard aviation wording and common mixed Whisper output such as `one 3,000` for 13,000 feet. The mixed form is accepted only when every component is an aviation digit or numeric digit group and the result is at least 1,000 feet; ambiguous cardinal wording remains rejected.
 
-Full N-numbers follow FAA registration structure and are spoken as `November` followed by individual digits and phonetic letters. The companion also accepts `November` plus the final three registration characters only when exactly one active N-number in the current snapshot has that suffix. A missing or ambiguous match remains fail-closed and is never silently selected.
+Full N-numbers follow FAA registration structure and are spoken as `November` followed by individual digits and phonetic letters. The companion also accepts abbreviated registrations and common recognition variants such as `Julia` and `Charley`. When more than one active registration is plausible, the highest-ranked match is selected.
 
 The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
@@ -241,7 +244,7 @@ The data directory can be changed in the application and is saved locally. The a
 5. Hold **Hold to record**, speak one or more supported instructions, and release the button.
 6. Choose **Cancel transcription** if recognition needs to be stopped.
 7. Review the transcript and generated command. If transcription wording is incorrect, edit the transcript and choose **Interpret again**; a new recording is not required.
-8. If an ambiguous-callsign error lists possible active callsigns, correct the transcript rather than selecting a guess blindly.
+8. Review the selected callsign and command in eATS before pressing Enter, especially when the companion labels the result as best effort.
 9. Confirm that the safety message matches the expected active aircraft and, for descend via, its assigned STAR.
 10. Use **Generate Command** when a manual fallback is needed; choosing **Generate command** also stages a green result when automatic staging is enabled.
 11. Inspect the automatically staged text in the lower-left eATS radio-command field and press **Enter** yourself only when it is safe to transmit.
@@ -263,7 +266,7 @@ The data directory can be changed in the application and is saved locally. The a
 - At-or-above and at-or-below crossing restrictions are not generated because the supplied eATS radio reference does not define equivalent command tokens.
 - Voice-generated direct, crossing, and published-speed commands verify or uniquely correct their fix against current aircraft route context when it is available. Manual off-route fixes remain supported. Cross-distance direction and route geometry are not verified.
 - Recognition uses the English `small.en` Whisper model and does not expose confidence scoring. It requires more download space and processing time than the earlier `base.en` model.
-- Best-effort recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the original transcript, recovered wording, preview fields, and staged eATS text must all be reviewed.
+- Ranked recovery improves common transcription errors but cannot guarantee that the intended instruction was understood; the raw transcript, confidence label, preview fields, and staged eATS text must all be reviewed.
 - Generated tests cover core interpretation across varied airlines, flight numbers, positions, STARs, and command families, plus file/service integration; actual microphone hardware and WPF interaction still require manual testing.
 - Stage-only entry depends on Windows foreground input; it aborts if eATS loses focus, and both applications should run at the same Windows privilege level.
 - There is no installer, signed release, or automatic command transmission.
