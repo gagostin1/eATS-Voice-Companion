@@ -14,6 +14,7 @@ The current workflow records a controller transmission, transcribes it locally w
 ## Current features
 
 - Discovers Windows recording devices and records hold-to-talk audio as 16 kHz, 16-bit, mono WAV files
+- Supports a configurable system-wide push-to-talk hotkey that starts on key-down and stops on key-up while eATS has focus
 - Downloads the higher-accuracy Whisper `small.en` model on first use and performs local speech recognition with beam-search decoding
 - Loads airline telephony names and designators from the user's installed eATS `Airlines.txt`
 - Recognizes full U.S. registration callsigns such as `N253PZ` from compact text or `November two five three papa zulu`
@@ -35,7 +36,8 @@ The current workflow records a controller transmission, transcribes it locally w
 - Automatically stages a freshly revalidated command in the eATS radio-command field, without pressing the final Enter key
 - Provides a persistent setting to disable automatic staging when preview-only operation is preferred
 - Provides visible cancellation while the model is downloading or a recording is being transcribed
-- Persists the controller position, preferred microphone, eATS data path, snapshot threshold, and recording-retention policy
+- Persists the controller position, preferred microphone, push-to-talk hotkey, eATS data path, snapshot threshold, and recording-retention policy
+- Retains the on-screen hold-to-record button as a fallback when no hotkey is assigned
 - Removes expired and excess recordings using configurable age and count limits
 - Writes privacy-conscious structured diagnostics as local JSON Lines files and retains them for 14 days
 - Verifies the pinned speech model by file size and SHA-256, replacing incomplete or corrupt copies before transcription
@@ -142,6 +144,8 @@ Full N-numbers follow FAA registration structure and are spoken as `November` fo
 The supplied eATS reference notes that eATS processes multiple tokens in order and may act on valid tokens before encountering a later operational error. The companion validates the entire generated sequence before staging, but the controller must still inspect every token because aircraft state can cause simulator-side rejection. The application never presses the final Enter key.
 
 Only a green, freshly revalidated command can be staged. With automatic staging enabled, the application verifies that the detected window still belongs to eATS, brings it to the foreground, clears incomplete input with **Esc**, enters the radio-command field, and types the validated command as soon as recognition or manual generation succeeds. Focus is checked before every input phase. The final Enter key is never generated; the controller must inspect and transmit the command manually. Automatic staging can be disabled under **Settings**.
+
+The **Settings** tab can assign a system-wide push-to-talk shortcut. Choose **Assign**, then press a key or key combination. A modifier such as Left/Right Ctrl, Shift, or Alt can be assigned by pressing and releasing it alone; keep holding the modifier and press another key to assign a combination. Save the settings to retain the shortcut. Hold it while speaking and release it to begin transcription. The companion observes the shortcut without consuming it, allowing the same key to continue working in TeamSpeak and other applications. **Escape** cancels shortcut capture; **Backspace**, **Delete**, or **Clear** removes the assignment. The on-screen recording button remains available as a fallback.
 
 ## Requirements
 

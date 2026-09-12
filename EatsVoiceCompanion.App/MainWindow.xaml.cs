@@ -61,6 +61,11 @@ public partial class MainWindow : Window
         CommandSafetyState.NotReady;
     private bool _currentPreviewWasStaged;
     private bool _isStagingCommand;
+    private GlobalPushToTalkHotkeyService? _pushToTalkHotkeyService;
+    private PushToTalkHotkeyDefinition? _pendingPushToTalkHotkey;
+    private bool _isCapturingPushToTalkHotkey;
+    private Key? _modifierHotkeyCandidate;
+    private bool _recordingStartedByHotkey;
 
     public MainWindow()
     {
@@ -80,6 +85,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         FitWindowToWorkArea();
         ApplySettingsToUi();
+        InitializePushToTalkHotkey();
         ConfigureEatsDataServices();
 
         _audioRecorder.RecordingCompleted +=
@@ -102,9 +108,9 @@ public partial class MainWindow : Window
 
         MaxWidth = workArea.Width;
         MaxHeight = workArea.Height;
-        MinHeight = Math.Min(800, workArea.Height * 0.90);
+        MinHeight = Math.Min(830, workArea.Height * 0.90);
         Width = Math.Min(920, workArea.Width * 0.92);
-        Height = Math.Min(800, workArea.Height * 0.96);
+        Height = Math.Min(830, workArea.Height * 0.96);
     }
 
     private CompanionSettings LoadSettingsOrDefaults()
@@ -140,6 +146,10 @@ public partial class MainWindow : Window
             _settings.MaximumSavedRecordings.ToString();
         AutoStageCommandsCheckBox.IsChecked =
             _settings.AutomaticallyStageVerifiedCommands;
+        PushToTalkHotkeyDefinition.TryParse(
+            _settings.PushToTalkHotkey,
+            out _pendingPushToTalkHotkey);
+        UpdatePushToTalkHotkeyUi();
 
         SettingsStatusText.Text = _startupSettingsWarning ??
             $"Settings file: {_settingsService.SettingsFilePath}";
@@ -182,11 +192,17 @@ public partial class MainWindow : Window
                 PreferredMicrophoneName =
                     (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name,
                 AutomaticallyStageVerifiedCommands =
-                    AutoStageCommandsCheckBox.IsChecked == true
+                    AutoStageCommandsCheckBox.IsChecked == true,
+                PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString()
             };
 
             _settingsService.Save(updated);
             _settings = updated;
+            if (_pushToTalkHotkeyService is not null)
+            {
+                _pushToTalkHotkeyService.Hotkey =
+                    _pendingPushToTalkHotkey;
+            }
             _recordingStorage.UpdatePolicy(
                 updated.RecordingRetentionDays,
                 updated.MaximumSavedRecordings);
@@ -530,9 +546,9 @@ public partial class MainWindow : Window
             CommandStageStatusText.Foreground = Brushes.ForestGreen;
             CommandStageStatusText.Text =
                 (_currentPreviewWasRecovered
-                    ? "Best-effort command staged in eATS. Carefully review "
-                    : "Command staged in eATS. Review ") +
-                "it there, then press Enter yourself to transmit.";
+                    ? "Best-effort command staged. Review in eATS, then "
+                    : "Command staged. Review in eATS, then ") +
+                "press Enter to transmit.";
 
             _logger.Information(
                 "CommandStaged",
@@ -625,6 +641,18 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
 
+        StartActiveRecording(captureMouse: true);
+    }
+
+    private void StartActiveRecording(bool captureMouse)
+    {
+        if (_audioRecorder.IsRecording ||
+            _transcriptionCancellation is not null ||
+            !RecordButton.IsEnabled)
+        {
+            return;
+        }
+
         if (_isStagingCommand)
         {
             RecordingStatusText.Text =
@@ -641,10 +669,15 @@ public partial class MainWindow : Window
 
         try
         {
-            RecordButton.CaptureMouse();
+            if (captureMouse)
+            {
+                RecordButton.CaptureMouse();
+            }
 
             string filePath = _audioRecorder.Start(
                 microphone.DeviceNumber);
+
+            _recordingStartedByHotkey = !captureMouse;
 
             SaveSettingsButton.IsEnabled = false;
             InterpretTranscriptButton.IsEnabled = false;
@@ -660,7 +693,12 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            RecordButton.ReleaseMouseCapture();
+            if (RecordButton.IsMouseCaptured)
+            {
+                RecordButton.ReleaseMouseCapture();
+            }
+
+            _recordingStartedByHotkey = false;
             RecordButton.Content = "Hold to record";
             SaveSettingsButton.IsEnabled = true;
             InterpretTranscriptButton.IsEnabled = true;
@@ -687,7 +725,10 @@ public partial class MainWindow : Window
         object? sender,
         EventArgs e)
     {
-        StopActiveRecording();
+        if (!_recordingStartedByHotkey)
+        {
+            StopActiveRecording();
+        }
     }
 
     private void StopActiveRecording()
@@ -707,6 +748,188 @@ public partial class MainWindow : Window
         RecordingStatusText.Text = "Saving WAV file...";
 
         _audioRecorder.Stop();
+        _recordingStartedByHotkey = false;
+    }
+
+    private void InitializePushToTalkHotkey()
+    {
+        try
+        {
+            _pushToTalkHotkeyService =
+                new GlobalPushToTalkHotkeyService
+                {
+                    Hotkey = _pendingPushToTalkHotkey
+                };
+            _pushToTalkHotkeyService.Pressed +=
+                PushToTalkHotkeyService_Pressed;
+            _pushToTalkHotkeyService.Released +=
+                PushToTalkHotkeyService_Released;
+        }
+        catch (Exception exception)
+        {
+            HotkeyStatusText.Foreground = Brushes.Firebrick;
+            HotkeyStatusText.Text =
+                $"Global hotkeys are unavailable: {exception.Message}";
+            AssignHotkeyButton.IsEnabled = false;
+
+            _logger.Error(
+                "PushToTalkHotkeyUnavailable",
+                "The global push-to-talk keyboard listener could not start.",
+                exception);
+        }
+    }
+
+    private void PushToTalkHotkeyService_Pressed(
+        object? sender,
+        EventArgs e)
+    {
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            if (!_isCapturingPushToTalkHotkey)
+            {
+                StartActiveRecording(captureMouse: false);
+            }
+        });
+    }
+
+    private void PushToTalkHotkeyService_Released(
+        object? sender,
+        EventArgs e)
+    {
+        _ = Dispatcher.BeginInvoke(StopActiveRecording);
+    }
+
+    private void AssignHotkey_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        _isCapturingPushToTalkHotkey = true;
+        _modifierHotkeyCandidate = null;
+        if (_pushToTalkHotkeyService is not null)
+        {
+            _pushToTalkHotkeyService.Hotkey = null;
+        }
+
+        AssignHotkeyButton.Content = "Press shortcut...";
+        HotkeyStatusText.Foreground = Brushes.DarkGoldenrod;
+        HotkeyStatusText.Text =
+            "Press the desired key combination. Escape cancels.";
+        Keyboard.Focus(AssignHotkeyButton);
+    }
+
+    private void ClearHotkey_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        _isCapturingPushToTalkHotkey = false;
+        _modifierHotkeyCandidate = null;
+        _pendingPushToTalkHotkey = null;
+        UpdatePushToTalkHotkeyUi();
+        HotkeyStatusText.Text =
+            "Hotkey cleared. Choose Save settings to keep the change.";
+    }
+
+    private void MainWindow_PreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (!_isCapturingPushToTalkHotkey)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key == Key.Escape)
+        {
+            _isCapturingPushToTalkHotkey = false;
+            _modifierHotkeyCandidate = null;
+            UpdatePushToTalkHotkeyUi();
+            HotkeyStatusText.Text = "Hotkey assignment canceled.";
+            return;
+        }
+
+        if (key is Key.Back or Key.Delete)
+        {
+            ClearHotkey_Click(this, new RoutedEventArgs());
+            return;
+        }
+
+        if (PushToTalkHotkeyDefinition.IsModifierKey(key))
+        {
+            _modifierHotkeyCandidate ??= key;
+            HotkeyStatusText.Text =
+                "Release the modifier to assign it alone, or keep holding " +
+                "it and press another key for a combination.";
+            return;
+        }
+
+        try
+        {
+            _pendingPushToTalkHotkey =
+                PushToTalkHotkeyDefinition.Create(
+                    key,
+                    Keyboard.Modifiers);
+            _isCapturingPushToTalkHotkey = false;
+            _modifierHotkeyCandidate = null;
+            UpdatePushToTalkHotkeyUi();
+            HotkeyStatusText.Foreground = Brushes.ForestGreen;
+            HotkeyStatusText.Text =
+                "Shortcut active. Choose Save settings to keep it.";
+        }
+        catch (ArgumentException exception)
+        {
+            HotkeyStatusText.Foreground = Brushes.Firebrick;
+            HotkeyStatusText.Text = exception.Message;
+        }
+    }
+
+    private void MainWindow_PreviewKeyUp(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (!_isCapturingPushToTalkHotkey ||
+            _modifierHotkeyCandidate is not { } candidate)
+        {
+            return;
+        }
+
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (key != candidate)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _pendingPushToTalkHotkey =
+            PushToTalkHotkeyDefinition.Create(
+                candidate,
+                ModifierKeys.None);
+        _isCapturingPushToTalkHotkey = false;
+        _modifierHotkeyCandidate = null;
+        UpdatePushToTalkHotkeyUi();
+        HotkeyStatusText.Foreground = Brushes.ForestGreen;
+        HotkeyStatusText.Text =
+            "Modifier shortcut active. Choose Save settings to keep it.";
+    }
+
+    private void UpdatePushToTalkHotkeyUi()
+    {
+        string display = _pendingPushToTalkHotkey?.ToString() ??
+            "Not assigned";
+        PushToTalkHotkeyTextBox.Text = display;
+        if (_pushToTalkHotkeyService is not null)
+        {
+            _pushToTalkHotkeyService.Hotkey =
+                _pendingPushToTalkHotkey;
+        }
+
+        VoiceHotkeyHintText.Text = _pendingPushToTalkHotkey is null
+            ? "No push-to-talk hotkey assigned."
+            : $"Hold {_pendingPushToTalkHotkey} to record from anywhere.";
+        AssignHotkeyButton.Content = "Assign";
     }
 
     private void CancelTranscription_Click(
@@ -768,8 +991,7 @@ public partial class MainWindow : Window
         await Dispatcher.InvokeAsync(() =>
         {
             SetTranscriptionControls(isBusy: true);
-            RecordingStatusText.Text =
-                $"Recording saved successfully:\n{e.FilePath}";
+            RecordingStatusText.Text = "Recording saved successfully.";
             TranscriptText.Text = "Working...";
             SpeechStatusText.Text =
                 "Preparing speech recognition...";
@@ -974,9 +1196,8 @@ public partial class MainWindow : Window
             else
             {
                 SpeechStatusText.Text =
-                    "Best-effort interpretation generated. Review every " +
-                    "field carefully before staging:\n" +
-                    interpretation.InterpretedTranscript;
+                    "Best-effort interpretation generated. Review the " +
+                    "transcript and command carefully.";
 
                 _logger.Warning(
                     "VoiceTranscriptRecovered",
@@ -1271,6 +1492,15 @@ public partial class MainWindow : Window
 
         _audioRecorder.RecordingCompleted -=
             AudioRecorder_RecordingCompleted;
+        if (_pushToTalkHotkeyService is not null)
+        {
+            _pushToTalkHotkeyService.Pressed -=
+                PushToTalkHotkeyService_Pressed;
+            _pushToTalkHotkeyService.Released -=
+                PushToTalkHotkeyService_Released;
+            _pushToTalkHotkeyService.Dispose();
+        }
+
         _audioRecorder.Dispose();
 
         _logger.Information(

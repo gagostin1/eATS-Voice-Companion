@@ -22,7 +22,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             RecordingRetentionDays = 14,
             MaximumSavedRecordings = 50,
             PreferredMicrophoneName = "Test microphone",
-            AutomaticallyStageVerifiedCommands = false
+            AutomaticallyStageVerifiedCommands = false,
+            PushToTalkHotkey = "Ctrl+Shift+F9"
         };
 
         service.Save(expected);
@@ -37,6 +38,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(
             expected.AutomaticallyStageVerifiedCommands,
             actual.AutomaticallyStageVerifiedCommands);
+        Assert.Equal(expected.PushToTalkHotkey, actual.PushToTalkHotkey);
     }
 
     [Fact]
@@ -51,6 +53,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(7, result.RecordingRetentionDays);
         Assert.Equal(100, result.MaximumSavedRecordings);
         Assert.True(result.AutomaticallyStageVerifiedCommands);
+        Assert.Null(result.PushToTalkHotkey);
     }
 
     [Fact]

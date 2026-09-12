@@ -1,4 +1,5 @@
 using System.IO;
+using EatsVoiceCompanion.App.Services;
 
 namespace EatsVoiceCompanion.App.Configuration;
 
@@ -17,6 +18,8 @@ public sealed class CompanionSettings
     public string? PreferredMicrophoneName { get; set; }
 
     public bool AutomaticallyStageVerifiedCommands { get; set; } = true;
+
+    public string? PushToTalkHotkey { get; set; }
 
     public static string GetDefaultEatsDataDirectory()
     {
@@ -63,5 +66,16 @@ public sealed class CompanionSettings
             string.IsNullOrWhiteSpace(PreferredMicrophoneName)
                 ? null
                 : PreferredMicrophoneName.Trim();
+
+        if (!PushToTalkHotkeyDefinition.TryParse(
+                PushToTalkHotkey,
+                out PushToTalkHotkeyDefinition? hotkey))
+        {
+            throw new ArgumentException(
+                "The push-to-talk hotkey is invalid.",
+                nameof(PushToTalkHotkey));
+        }
+
+        PushToTalkHotkey = hotkey?.ToString();
     }
 }

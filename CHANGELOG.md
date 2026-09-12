@@ -8,6 +8,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- A configurable non-exclusive system-wide hold-to-record hotkey, including modifier-only assignments, Settings capture, persistence, key-repeat protection, TeamSpeak passthrough, and an on-screen recording fallback
 - A modern three-tab interface that prioritizes voice operation while separating manual command generation and connection/audio settings
 - Optional automatic staging of freshly verified voice and manual commands, while retaining the controller's final Enter action
 - Cobertura code-coverage collection, validation, summaries, and downloadable CI artifacts
@@ -34,6 +35,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Fixed
 
+- Voice results keep a compact, stable layout instead of expanding the page with recording paths and repeated recovery/staging text
+- Settings are vertically grouped beneath a persistent global save bar that clearly applies to every settings section
 - Airline entries with trailing flight-number ranges, including Blue Streak, Endeavor, Piedmont, Brickyard, and SkyWest, are now loaded from `Airlines.txt`
 - Stale snapshots retain non-authoritative callsign context for best-effort preview recovery while staging remains disabled
 - Mixed word/digit altitude transcripts such as `one 3,000` are normalized without accepting ambiguous cardinal wording

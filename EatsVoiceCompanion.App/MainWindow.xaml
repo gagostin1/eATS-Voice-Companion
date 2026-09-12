@@ -3,11 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="eATS Voice Companion"
         Width="920"
-        Height="820"
+        Height="830"
         MinWidth="700"
-        MinHeight="800"
+        MinHeight="830"
         Background="#FFF4F7FB"
         Deactivated="MainWindow_Deactivated"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
+        PreviewKeyUp="MainWindow_PreviewKeyUp"
         FontFamily="Segoe UI"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -183,6 +185,12 @@
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="Hold while speaking, then release. The app transcribes, verifies, and stages the command automatically."
                                                TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="VoiceHotkeyHintText"
+                                               Margin="0,0,0,10"
+                                               Foreground="#FF1E40AF"
+                                               FontWeight="SemiBold"
+                                               Text="No push-to-talk hotkey assigned."
+                                               TextWrapping="Wrap"/>
                                     <Button x:Name="RecordButton"
                                             HorizontalAlignment="Left"
                                             Content="Hold to record"
@@ -191,8 +199,11 @@
                                             Style="{StaticResource RecordButtonStyle}"/>
                                     <TextBlock x:Name="RecordingStatusText"
                                                Margin="0,14,0,0"
+                                               MaxHeight="42"
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="Ready for your first transmission."
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <Border Grid.Column="1"
@@ -246,8 +257,11 @@
                                     </Border>
                                     <TextBlock x:Name="SpeechStatusText"
                                                Margin="0,12,0,0"
+                                               MaxHeight="42"
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="Speech recognition has not been run."
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                TextWrapping="Wrap"/>
                                     <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
                                         <Button x:Name="InterpretTranscriptButton"
@@ -290,14 +304,20 @@
                                     </Border>
                                     <TextBlock x:Name="CommandSafetyStatusText"
                                                Margin="0,13,0,0"
+                                               MaxHeight="42"
                                                FontWeight="SemiBold"
                                                Foreground="#FFB36B00"
                                                Text="Preview only: no command has been validated."
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                TextWrapping="Wrap"/>
                                     <TextBlock x:Name="CommandStageStatusText"
                                                Margin="0,9,0,0"
+                                               MaxHeight="42"
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="Only a freshly verified command can be staged."
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
@@ -432,15 +452,45 @@
             </TabItem>
 
             <TabItem Header="Settings">
-                <ScrollViewer Padding="2,18,2,2" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Margin="2,18,2,0"
+                            Style="{StaticResource CardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Margin="0,0,8,0"
-                                    Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                           Text="Application settings"/>
+                                <TextBlock Margin="0,5,18,0"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           Text="Save all audio, hotkey, automation, connection, and retention settings together."
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="SettingsStatusText"
+                                           Margin="0,8,18,0"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button x:Name="SaveSettingsButton"
+                                    Grid.Column="1"
+                                    MinWidth="150"
+                                    VerticalAlignment="Center"
+                                    Click="SaveSettings_Click"
+                                    Content="Save all settings"
+                                    Style="{StaticResource PrimaryButtonStyle}"/>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" Padding="2,16,2,2"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Audio input"/>
                                     <TextBlock Margin="0,5,0,18"
@@ -457,9 +507,39 @@
                                                Margin="0,12,0,0"
                                                Foreground="{StaticResource MutedBrush}"
                                                TextWrapping="Wrap"/>
+                                    <TextBlock Margin="0,18,0,0"
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               Text="Global push-to-talk hotkey"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PushToTalkHotkeyTextBox"
+                                                 IsReadOnly="True"
+                                                 Text="Not assigned"/>
+                                        <Button x:Name="AssignHotkeyButton"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Click="AssignHotkey_Click"
+                                                Content="Assign"
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                        <Button Grid.Column="2"
+                                                Margin="8,0,0,0"
+                                                Click="ClearHotkey_Click"
+                                                Content="Clear"
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                    </Grid>
+                                    <TextBlock x:Name="HotkeyStatusText"
+                                               Margin="0,8,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Choose Assign, then press a key or key combination."
+                                               TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
-                            <Border Grid.Column="1" Margin="8,0,0,0"
+
+                            <Border Margin="0,16,0,0"
                                     Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Automation"/>
@@ -477,88 +557,79 @@
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
-                        </Grid>
 
-                        <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="eATS connection"/>
-                                <TextBlock Margin="0,5,0,20"
-                                           Foreground="{StaticResource MutedBrush}"
-                                           Text="Configure local simulator context and recording retention."
-                                           TextWrapping="Wrap"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Controller position"/>
-                                        <TextBox x:Name="ControllerPositionTextBox" Text="Atlanta Center"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="eATS data directory"/>
-                                        <TextBox x:Name="EatsDataDirectoryTextBox"/>
-                                    </StackPanel>
-                                </Grid>
-                                <Grid Margin="0,16,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Snapshot freshness (minutes)"/>
-                                        <TextBox x:Name="SnapshotFreshnessTextBox"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="8,0,8,0">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Keep recordings (days)"/>
-                                        <TextBox x:Name="RecordingRetentionTextBox"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2" Margin="8,0,0,0">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Maximum recordings"/>
-                                        <TextBox x:Name="MaximumRecordingsTextBox"/>
-                                    </StackPanel>
-                                </Grid>
-                                <StackPanel Margin="0,18,0,0" Orientation="Horizontal">
-                                    <Button x:Name="SaveSettingsButton"
-                                            Click="SaveSettings_Click"
-                                            Content="Save settings"
-                                            Style="{StaticResource PrimaryButtonStyle}"/>
-                                    <Button Margin="10,0,0,0"
+                            <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="eATS connection"/>
+                                    <TextBlock Margin="0,5,0,20"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Configure local simulator context and recording retention."
+                                               TextWrapping="Wrap"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Controller position"/>
+                                            <TextBox x:Name="ControllerPositionTextBox" Text="Atlanta Center"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="eATS data directory"/>
+                                            <TextBox x:Name="EatsDataDirectoryTextBox"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Margin="0,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Snapshot freshness (minutes)"/>
+                                            <TextBox x:Name="SnapshotFreshnessTextBox"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,8,0">
+                                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Keep recordings (days)"/>
+                                            <TextBox x:Name="RecordingRetentionTextBox"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                                            <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Maximum recordings"/>
+                                            <TextBox x:Name="MaximumRecordingsTextBox"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Button Margin="0,18,0,0"
+                                            HorizontalAlignment="Left"
                                             Click="DetectEats_Click"
                                             Content="Detect eATS"
                                             Style="{StaticResource BaseButtonStyle}"/>
                                 </StackPanel>
-                                <TextBlock x:Name="SettingsStatusText"
-                                           Margin="0,12,0,0"
-                                           Foreground="{StaticResource MutedBrush}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+                            </Border>
 
-                        <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Connection status"/>
-                                <Border Margin="0,14,0,0" Padding="16"
-                                        Background="#FFF8FAFC" CornerRadius="9">
-                                    <TextBlock x:Name="StatusText"
-                                               Text="Detection has not been run."
+                            <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Connection status"/>
+                                    <Border Margin="0,14,0,0" Padding="16"
+                                            Background="#FFF8FAFC" CornerRadius="9">
+                                        <TextBlock x:Name="StatusText"
+                                                   Text="Detection has not been run."
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
+                                    <TextBlock x:Name="AirlineDataStatusText"
+                                               Margin="0,12,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Airline data has not been loaded."
                                                TextWrapping="Wrap"/>
-                                </Border>
-                                <TextBlock x:Name="AirlineDataStatusText"
-                                           Margin="0,12,0,0"
-                                           Foreground="{StaticResource MutedBrush}"
-                                           Text="Airline data has not been loaded."
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="SnapshotStatusText"
-                                           Margin="0,9,0,0"
-                                           Foreground="{StaticResource MutedBrush}"
-                                           Text="Active-aircraft context has not been loaded."
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                                    <TextBlock x:Name="SnapshotStatusText"
+                                               Margin="0,9,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Active-aircraft context has not been loaded."
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>
