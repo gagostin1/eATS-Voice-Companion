@@ -6,6 +6,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-12
+
 ### Added
 
 - Ranked, scenario-constrained command hypotheses that automatically stage the highest-ranked valid command; non-empty speech with active-aircraft context always falls back to a valid command for the best-matched aircraft
@@ -82,5 +84,6 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Active callsigns require an exact match against a fresh snapshot for verified status
 - Unknown commands, invalid values, control characters, and unsupported output tokens are rejected
 
-[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0

@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
 
@@ -188,3 +190,47 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  release:
+    name: Publish GitHub release
+    if: ${{ github.ref_type == 'tag' }}
+    needs: build-test-package
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Download validated Windows package
+        uses: actions/download-artifact@v7
+        with:
+          name: EatsVoiceCompanion-win-x64-${{ github.sha }}
+          path: .\artifacts\release
+
+      - name: Publish release with checksum
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $zipPath = '.\artifacts\release\EatsVoiceCompanion-win-x64.zip'
+          $notesPath = ".\docs\release-notes\$tag.md"
+          $finalNotes = Join-Path $env:RUNNER_TEMP "$tag-release-notes.md"
+
+          if (Test-Path -LiteralPath $notesPath) {
+            Copy-Item -LiteralPath $notesPath -Destination $finalNotes
+          }
+          else {
+            "# eATS Voice Companion $tag" | Set-Content $finalNotes
+          }
+
+          $hash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
+          Add-Content $finalNotes "`n## Package verification`n"
+          Add-Content $finalNotes "SHA-256: ``$($hash.Hash)``"
+
+          gh release create $tag $zipPath `
+            --title "eATS Voice Companion $tag" `
+            --notes-file $finalNotes `
+            --verify-tag

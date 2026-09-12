@@ -1,15 +1,17 @@
 # eATS Voice Companion
 
+<img src="assets/eats-voice-companion-logo.png" alt="eATS Voice Companion radar and microphone logo" width="160">
+
 eATS Voice Companion is an independent Windows application that adds local voice recognition, safety-checked command generation, and automatic stage-only command entry to the eATS enroute air traffic control simulator.
 
-[Download eATS Voice Companion v0.1.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.1.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0) · [Changelog](CHANGELOG.md)
+[Download eATS Voice Companion v0.2.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.2.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md)
 
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
 
 The current workflow records a controller transmission, transcribes it locally with Whisper, interprets supported ATC phraseology, formats the matching eATS command, verifies it against current context, and automatically stages a green command in eATS for review. The application never presses the final Enter key or transmits the command automatically.
 
 > [!IMPORTANT]
-> This project is an early pre-release. Always verify the transcript, callsign, instruction, and value shown in the preview. A green check confirms the available eATS context required for that command; it does not prove that the recognized instruction is operationally correct.
+> This project is a public beta. Always verify the transcript, callsign, instruction, and value shown in the preview. A green check confirms the available eATS context required for that command; it does not prove that the recognized instruction is operationally correct.
 
 ## Current features
 
@@ -25,7 +27,7 @@ The current workflow records a controller transmission, transcribes it locally w
 - Supports transponder code, IDENT, altitude-reporting, normal, standby, and VFR instructions
 - Adds active airline and N-number callsigns, STARs, and a bounded set of current route fixes to the speech-recognition prompt
 - Generates and ranks complete command hypotheses when raw transcription cannot be parsed, using active eATS callsigns, supported instruction phrases, assigned STARs, aircraft-specific route fixes, and command-value validation
-- Automatically stages a uniquely highest-ranked valid voice hypothesis for review while continuing to leave the final Enter action to the controller
+- Automatically stages the highest-ranked valid voice hypothesis for review while continuing to leave the final Enter action to the controller
 - Lets the controller correct an imperfect transcript and interpret it again without making another recording
 - Chooses the highest-ranked active callsign when speech remains ambiguous so every non-empty recording can produce a command
 - Supports an optional controller position in transmissions, such as `American 1307, Atlanta Center, ...`
@@ -163,9 +165,9 @@ The application uses [NAudio](https://www.nuget.org/packages/NAudio) for recordi
 
 The self-contained release includes the .NET runtime. Building from source additionally requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), Git, and Visual Studio, Visual Studio Code, or another C# editor.
 
-## Installing the pre-release
+## Installing the public beta
 
-1. Download [`EatsVoiceCompanion-win-x64.zip`](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.1.0/EatsVoiceCompanion-win-x64.zip) from the [v0.1.0 release](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0).
+1. Download [`EatsVoiceCompanion-win-x64.zip`](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.2.0/EatsVoiceCompanion-win-x64.zip) from the [v0.2.0 release](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0).
 2. Verify the package checksum shown in the release notes if desired.
 3. Extract the entire ZIP to a folder. Do not run the application from inside the ZIP archive.
 4. Start `EatsVoiceCompanion.App.exe` from the extracted folder.
@@ -284,7 +286,7 @@ EatsVoiceCompanion.Tests/   Core and application-service integration tests
 - Keep the supported command set stable while expanding real-world microphone and eATS scenario testing
 - Support aircraft-type-based general-aviation callsign phraseology
 - Add automated WPF interaction tests and hardware-in-the-loop microphone tests
-- Add an installer, code signing, and automated tagged releases
+- Add an installer and code signing
 
 ## Privacy
 

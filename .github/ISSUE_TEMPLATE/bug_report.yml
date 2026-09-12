@@ -14,7 +14,7 @@ body:
     attributes:
       label: Application version
       description: Find this in the release name or the executable's Properties > Details page.
-      placeholder: 0.1.0
+      placeholder: 0.2.0
     validations:
       required: true
 
