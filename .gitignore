@@ -24,10 +24,6 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
-# Keep documentation stored under docs/releases while continuing to ignore
-# Visual Studio build-output directories with the same name elsewhere.
-!docs/releases/
-!docs/releases/**
 x64/
 x86/
 [Ww][Ii][Nn]32/
