@@ -6,6 +6,10 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+### Fixed
+
+- A simplified high-contrast microphone-and-radar application icon remains recognizable in the Windows title bar and taskbar while the detailed logo remains the primary project artwork
+
 ## [0.2.0] - 2026-09-12
 
 ### Added
