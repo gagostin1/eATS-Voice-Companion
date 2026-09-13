@@ -33,6 +33,44 @@ public sealed class SpeechWorkflowServiceTests
     }
 
     [Fact]
+    public async Task RunAsync_AddsReviewedLocalCorrectionsToPrompt()
+    {
+        DateTime now = DateTime.UtcNow;
+        FakeSpeechRecognitionService speech = new("recognized text");
+        RecognitionContextService context = new(
+            new RunningProcessDetector(),
+            new CountingSnapshotService(
+                new EatsSnapshotData(["AAL123"], now)),
+            new Dictionary<string, string>
+            {
+                ["AMERICAN"] = "AAL"
+            },
+            TimeSpan.FromMinutes(3),
+            () => now);
+        LocalCorrectionMemoryService memory = new();
+        memory.Update(
+        [
+            new CorrectionHistoryEntry
+            {
+                ReviewStatus = CorrectionReviewStatus.Corrected,
+                OriginalTranscript =
+                    "American 123 climate maintain flight level 230",
+                CorrectedTranscript =
+                    "American 123 climb and maintain flight level 230",
+                ExpectedCommand = "AAL123 CM230"
+            }
+        ]);
+        SpeechWorkflowService workflow = new(speech, context, memory);
+
+        await workflow.RunAsync("recording.wav", "Atlanta Center");
+
+        Assert.Contains(
+            "climb and maintain flight level 230",
+            speech.AdditionalPrompt,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task RunAsync_CancellationStopsBeforeContextRefresh()
     {
         DateTime now = DateTime.UtcNow;

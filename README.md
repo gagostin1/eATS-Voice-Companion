@@ -21,7 +21,7 @@ Created and maintained by **Gus Agostinho**.
 - Uses assigned STARs, flight plans, airways, and route fixes to improve command interpretation
 - Ranks best-effort command hypotheses when the transcript is imperfect
 - Supports multi-instruction transmissions and editable transcript retries
-- Keeps a private local correction history with review, replay, and sanitized regression-case export
+- Keeps a private local correction history whose reviewed corrections guide future prompts and route-safe fix recovery, with replay and sanitized regression-case export
 - Validates generated tokens and checks callsigns against the current eATS snapshot
 - Automatically stages the best command in eATS while leaving transmission to the controller
 

@@ -58,6 +58,35 @@ public sealed class CorrectionHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public void Delete_RemovesHistoryEntryWithoutTouchingRecording()
+    {
+        CorrectionHistoryService service = new(_directory);
+        CorrectionHistoryEntry entry = CreateEntry();
+        string recording = Path.Combine(_directory, "recording.wav");
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(recording, "retained audio placeholder");
+        entry.RecordingFilePath = recording;
+        service.Save(entry);
+
+        service.Delete(entry.Id);
+
+        Assert.Empty(service.Load());
+        Assert.True(File.Exists(recording));
+    }
+
+    [Fact]
+    public void SaveAndLoad_PreservesLearningExclusion()
+    {
+        CorrectionHistoryService service = new(_directory);
+        CorrectionHistoryEntry entry = CreateEntry();
+        entry.UseForLocalLearning = false;
+
+        service.Save(entry);
+
+        Assert.False(Assert.Single(service.Load()).UseForLocalLearning);
+    }
+
+    [Fact]
     public void Load_SkipsDamagedEntries()
     {
         CorrectionHistoryService service = new(_directory);

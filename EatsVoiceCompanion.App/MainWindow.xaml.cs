@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly SpeechRecognitionService _speechRecognitionService;
     private readonly EatsCommandStager _commandStager;
     private readonly CorrectionHistoryService _correctionHistoryService;
+    private readonly LocalCorrectionMemoryService _correctionMemoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
     private CompanionSettings _settings;
@@ -86,6 +87,7 @@ public partial class MainWindow : Window
             logger: _logger);
         _commandStager = new EatsCommandStager();
         _correctionHistoryService = new CorrectionHistoryService();
+        _correctionMemoryService = new LocalCorrectionMemoryService();
 
         InitializeComponent();
         FitWindowToWorkArea();
@@ -100,8 +102,8 @@ public partial class MainWindow : Window
         int deletedRecordings = _recordingStorage.Cleanup();
 
         LoadMicrophones();
-        BuildRecognitionContext();
         RefreshCorrectionHistory();
+        BuildRecognitionContext();
 
         _logger.Information(
             "ApplicationStarted",
@@ -366,7 +368,8 @@ public partial class MainWindow : Window
             routeContextService: routeContextService);
         _speechWorkflowService = new SpeechWorkflowService(
             _speechRecognitionService,
-            _recognitionContextService);
+            _recognitionContextService,
+            _correctionMemoryService);
     }
 
     private void DetectEats_Click(
@@ -1208,6 +1211,15 @@ public partial class MainWindow : Window
             !isBusy &&
             _settings.ParticipateInRecognitionImprovement &&
             CorrectionHistoryListBox.SelectedItem is not null;
+        ToggleHistoryLearningButton.IsEnabled =
+            !isBusy &&
+            CorrectionHistoryListBox.SelectedItem is
+                CorrectionHistoryEntry
+                {
+                    ReviewStatus: not CorrectionReviewStatus.Unreviewed
+                };
+        DeleteHistoryEntryButton.IsEnabled =
+            !isBusy && CorrectionHistoryListBox.SelectedItem is not null;
         CancelTranscriptionButton.IsEnabled = isBusy;
         CancelTranscriptionButton.Content = "Cancel transcription";
     }
@@ -1339,6 +1351,14 @@ public partial class MainWindow : Window
                 (CorrectionHistoryListBox.SelectedItem as
                     CorrectionHistoryEntry)?.Id;
             _correctionHistory = _correctionHistoryService.Load();
+            _correctionMemoryService.Update(_correctionHistory);
+            IReadOnlyList<string> learnedMappings =
+                _correctionMemoryService.GetLearnedFixMappings();
+            LearnedMappingsText.Text = learnedMappings.Count == 0
+                ? "No learned fix mappings yet. Corrected phrase examples " +
+                  "will still guide Whisper when available."
+                : "Route-gated mappings: " +
+                  string.Join(", ", learnedMappings);
             CorrectionHistoryListBox.ItemsSource = _correctionHistory;
             HistoryCountText.Foreground = Brushes.DimGray;
             HistoryCountText.Text = _correctionHistory.Count == 0
@@ -1379,6 +1399,10 @@ public partial class MainWindow : Window
         bool hasEntry = entry is not null;
         MarkHistoryCorrectButton.IsEnabled = hasEntry;
         SaveHistoryCorrectionButton.IsEnabled = hasEntry;
+        ToggleHistoryLearningButton.IsEnabled =
+            hasEntry &&
+            entry!.ReviewStatus != CorrectionReviewStatus.Unreviewed;
+        DeleteHistoryEntryButton.IsEnabled = hasEntry;
         ExportHistoryButton.IsEnabled =
             hasEntry && _settings.ParticipateInRecognitionImprovement;
         ReplayHistoryButton.IsEnabled =
@@ -1395,6 +1419,7 @@ public partial class MainWindow : Window
             HistoryOriginalCommandTextBox.Text = string.Empty;
             HistoryCorrectedTranscriptTextBox.Text = string.Empty;
             HistoryExpectedCommandTextBox.Text = string.Empty;
+            ToggleHistoryLearningButton.Content = "Exclude from learning";
             HistoryReplayResultText.Text =
                 "This attempt has not been replayed.";
             HistoryReplayResultText.Foreground = Brushes.DimGray;
@@ -1406,7 +1431,15 @@ public partial class MainWindow : Window
         HistoryDetailStatusText.Text =
             $"{entry.RecordedAtUtc.ToLocalTime():F} · " +
             $"{entry.ReviewStatus} · " +
-            (hasAudio ? "Audio available" : "Audio expired or missing");
+            (hasAudio ? "Audio available" : "Audio expired or missing") +
+            (entry.ReviewStatus == CorrectionReviewStatus.Unreviewed
+                ? " · Not used for learning until reviewed"
+                : entry.UseForLocalLearning
+                    ? " · Local learning active"
+                    : " · Local learning excluded");
+        ToggleHistoryLearningButton.Content = entry.UseForLocalLearning
+            ? "Exclude from learning"
+            : "Include in learning";
         HistoryOriginalTranscriptTextBox.Text = entry.OriginalTranscript;
         HistoryOriginalCommandTextBox.Text =
             entry.GeneratedCommand ?? "No valid command was generated.";
@@ -1504,7 +1537,9 @@ public partial class MainWindow : Window
             entry.CorrectedTranscript = transcript;
             entry.ExpectedCommand = command;
             entry.ReviewStatus = CorrectionReviewStatus.Corrected;
-            SaveReviewedHistoryEntry(entry, "Correction saved locally.");
+            SaveReviewedHistoryEntry(
+                entry,
+                "Correction saved and added to local recognition memory.");
         }
         catch (Exception exception)
         {
@@ -1533,6 +1568,118 @@ public partial class MainWindow : Window
                 "CorrectionReviewSaveFailed",
                 "A correction-history review could not be saved.",
                 exception);
+        }
+    }
+
+    private void ToggleHistoryLearning_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+                CorrectionHistoryEntry entry ||
+            entry.ReviewStatus == CorrectionReviewStatus.Unreviewed)
+        {
+            return;
+        }
+
+        entry.UseForLocalLearning = !entry.UseForLocalLearning;
+        SaveReviewedHistoryEntry(
+            entry,
+            entry.UseForLocalLearning
+                ? "This correction now guides local recognition."
+                : "This correction is excluded from local recognition.");
+    }
+
+    private void ClearLearningMemory_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        CorrectionHistoryEntry[] learned = _correctionHistory
+            .Where(entry =>
+                entry.ReviewStatus != CorrectionReviewStatus.Unreviewed &&
+                entry.UseForLocalLearning)
+            .ToArray();
+
+        if (learned.Length == 0)
+        {
+            HistoryCountText.Text =
+                "Local recognition memory is already clear.";
+            return;
+        }
+
+        MessageBoxResult confirmation = MessageBox.Show(
+            this,
+            "Stop using every reviewed correction for local recognition? " +
+            "History entries and retained recordings will not be deleted.",
+            "Clear learned memory",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (CorrectionHistoryEntry entry in learned)
+            {
+                entry.UseForLocalLearning = false;
+                _correctionHistoryService.Save(entry);
+            }
+
+            RefreshCorrectionHistory();
+            HistoryCountText.Text =
+                "Learned memory cleared. History and recordings were kept.";
+        }
+        catch (Exception exception)
+        {
+            HistoryCountText.Foreground = Brushes.Firebrick;
+            HistoryCountText.Text =
+                $"Learned memory could not be cleared: {exception.Message}";
+        }
+    }
+
+    private void DeleteHistoryEntry_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+            CorrectionHistoryEntry entry)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation = MessageBox.Show(
+            this,
+            "Delete this correction-history entry? Its retained audio will " +
+            "remain subject to the normal recording-retention settings.",
+            "Delete saved attempt",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _correctionHistoryService.Delete(entry.Id);
+
+            if (_currentVoiceHistoryEntryId == entry.Id)
+            {
+                _currentVoiceHistoryEntryId = null;
+            }
+
+            RefreshCorrectionHistory();
+            HistoryCountText.Text = "History entry deleted.";
+        }
+        catch (Exception exception)
+        {
+            HistoryCountText.Foreground = Brushes.Firebrick;
+            HistoryCountText.Text =
+                $"The history entry could not be deleted: {exception.Message}";
         }
     }
 
@@ -1596,9 +1743,15 @@ public partial class MainWindow : Window
                         pair.Value,
                         StringComparer.OrdinalIgnoreCase),
                     StringComparer.OrdinalIgnoreCase);
+            string adaptedTranscript =
+                _correctionMemoryService.ApplyLearnedFixAliases(
+                    transcript,
+                    callsigns,
+                    routeFixes,
+                    _airlineAliases);
             VoiceCommandInterpretation interpretation =
                 _voiceCommandInterpreter.Interpret(
-                    transcript,
+                    adaptedTranscript,
                     entry.ControllerPosition,
                     callsigns,
                     entry.ActiveStars,
@@ -1664,6 +1817,7 @@ public partial class MainWindow : Window
 
         RecognitionContextResult current =
             _recognitionContextService.Build(entry.ControllerPosition);
+        current = _correctionMemoryService.Enrich(current);
 
         if (!current.ActiveCallsigns.Contains(callsign))
         {
@@ -1762,9 +1916,15 @@ public partial class MainWindow : Window
 
         try
         {
+            string adaptedTranscript =
+                _correctionMemoryService.ApplyLearnedFixAliases(
+                    transcript,
+                    _activeCallsigns,
+                    _activeRouteFixes,
+                    _airlineAliases);
             VoiceCommandInterpretation interpretation =
                 _voiceCommandInterpreter.Interpret(
-                    transcript,
+                    adaptedTranscript,
                     ControllerPositionTextBox.Text,
                     _activeCallsigns,
                     _activeStars,
@@ -1956,6 +2116,7 @@ public partial class MainWindow : Window
         RecognitionContextResult context =
             _recognitionContextService.Build(
                 ControllerPositionTextBox.Text);
+        context = _correctionMemoryService.Enrich(context);
 
         ApplyRecognitionContext(context);
         return context.Prompt;

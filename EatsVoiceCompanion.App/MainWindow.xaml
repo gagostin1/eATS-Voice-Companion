@@ -349,14 +349,20 @@
                                            Text="Correction history"/>
                                 <TextBlock Margin="0,5,18,0"
                                            Foreground="{StaticResource MutedBrush}"
-                                           Text="Review real voice attempts, preserve the intended result, and replay retained audio through the current recognizer without staging it in eATS."
+                                           Text="Review real voice attempts, teach local recognition from corrections, and replay retained audio through the current recognizer without staging it in eATS."
                                            TextWrapping="Wrap"/>
                             </StackPanel>
-                            <Button Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    Click="RefreshHistory_Click"
-                                    Content="Refresh history"
-                                    Style="{StaticResource BaseButtonStyle}"/>
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Orientation="Horizontal">
+                                <Button Margin="0,0,10,0"
+                                        Click="ClearLearningMemory_Click"
+                                        Content="Clear learned memory"
+                                        Style="{StaticResource BaseButtonStyle}"/>
+                                <Button Click="RefreshHistory_Click"
+                                        Content="Refresh history"
+                                        Style="{StaticResource BaseButtonStyle}"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -453,12 +459,38 @@
                                                 Content="Replay through recognizer"
                                                 Style="{StaticResource BaseButtonStyle}"/>
                                         <Button x:Name="ExportHistoryButton"
-                                                Margin="0,0,0,10"
+                                                Margin="0,0,10,10"
                                                 Click="ExportHistory_Click"
                                                 Content="Export regression case"
                                                 ToolTip="Enable recognition-improvement participation in Settings to export a contribution-ready case."
                                                 Style="{StaticResource BaseButtonStyle}"/>
+                                        <Button x:Name="ToggleHistoryLearningButton"
+                                                Margin="0,0,10,10"
+                                                Click="ToggleHistoryLearning_Click"
+                                                Content="Exclude from learning"
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                        <Button x:Name="DeleteHistoryEntryButton"
+                                                Margin="0,0,0,10"
+                                                Click="DeleteHistoryEntry_Click"
+                                                Content="Delete attempt"
+                                                Style="{StaticResource BaseButtonStyle}"/>
                                     </WrapPanel>
+
+                                    <Border Margin="0,6,0,10"
+                                            Padding="14"
+                                            Background="#FFEFF6FF"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}"
+                                                       Text="Local recognition memory"/>
+                                            <TextBlock x:Name="LearnedMappingsText"
+                                                       Margin="0,7,0,0"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       Text="No learned fix mappings yet."
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
 
                                     <Border Margin="0,6,0,0"
                                             Padding="14"

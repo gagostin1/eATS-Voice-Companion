@@ -9,16 +9,19 @@ public sealed class SpeechWorkflowService
 {
     private readonly ISpeechRecognitionService _speechRecognitionService;
     private readonly RecognitionContextService _recognitionContextService;
+    private readonly LocalCorrectionMemoryService? _correctionMemoryService;
 
     public SpeechWorkflowService(
         ISpeechRecognitionService speechRecognitionService,
-        RecognitionContextService recognitionContextService)
+        RecognitionContextService recognitionContextService,
+        LocalCorrectionMemoryService? correctionMemoryService = null)
     {
         ArgumentNullException.ThrowIfNull(speechRecognitionService);
         ArgumentNullException.ThrowIfNull(recognitionContextService);
 
         _speechRecognitionService = speechRecognitionService;
         _recognitionContextService = recognitionContextService;
+        _correctionMemoryService = correctionMemoryService;
     }
 
     public async Task<SpeechWorkflowResult> RunAsync(
@@ -30,6 +33,8 @@ public sealed class SpeechWorkflowService
     {
         RecognitionContextResult contextBefore =
             _recognitionContextService.Build(controllerPosition);
+        contextBefore = _correctionMemoryService?.Enrich(contextBefore) ??
+            contextBefore;
 
         contextProgress?.Report(contextBefore);
 
@@ -44,6 +49,8 @@ public sealed class SpeechWorkflowService
 
         RecognitionContextResult contextAfter =
             _recognitionContextService.Build(controllerPosition);
+        contextAfter = _correctionMemoryService?.Enrich(contextAfter) ??
+            contextAfter;
 
         contextProgress?.Report(contextAfter);
 

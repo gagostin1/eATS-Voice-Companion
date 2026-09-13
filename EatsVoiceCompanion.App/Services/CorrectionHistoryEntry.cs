@@ -41,6 +41,8 @@ public sealed class CorrectionHistoryEntry
 
     public string? ExpectedCommand { get; set; }
 
+    public bool UseForLocalLearning { get; set; } = true;
+
     public DateTime? LastReplayedAtUtc { get; set; }
 
     public string? LatestReplayTranscript { get; set; }
@@ -53,6 +55,10 @@ public sealed class CorrectionHistoryEntry
     public string DisplayTitle =>
         $"{RecordedAtUtc.ToLocalTime():g}  ·  " +
         $"{ReviewStatus}  ·  " +
+        (ReviewStatus != CorrectionReviewStatus.Unreviewed &&
+         !UseForLocalLearning
+            ? "Learning off  ·  "
+            : string.Empty) +
         (GeneratedCommand ?? "No command");
 }
 

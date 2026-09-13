@@ -8,6 +8,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- Local adaptive correction memory feeds reviewed phrases back into Whisper prompts and learns route-gated fix aliases without changing the bundled model
+- History controls show learned mappings and allow individual exclusions, attempt deletion, or clearing learned memory without deleting retained recordings
 - Visible creator and copyright attribution for Gus Agostinho in the application header, Settings page, assembly metadata, and project README
 - A first-run recognition-improvement notice with an enabled-by-default participation preference, an immediate opt-out, and a persistent Settings control; no data is uploaded automatically in this release
 - Local correction history for completed voice attempts, including correct/corrected review states, expected commands, saved recognition context, sanitized regression-case export, and non-staging WAV replay against the current recognizer

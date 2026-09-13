@@ -106,6 +106,18 @@ public sealed class CorrectionHistoryService
         TrimExcessEntries();
     }
 
+    public void Delete(Guid id)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "A correction-history identifier is required.",
+                nameof(id));
+        }
+
+        File.Delete(GetEntryPath(id));
+    }
+
     public void ExportRegressionCase(
         CorrectionHistoryEntry entry,
         string destinationPath,
