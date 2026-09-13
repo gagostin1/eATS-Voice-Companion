@@ -121,7 +121,8 @@ public sealed class CorrectionHistoryService
     public void ExportRegressionCase(
         CorrectionHistoryEntry entry,
         string destinationPath,
-        string appVersion)
+        string appVersion,
+        IReadOnlyDictionary<string, string>? airlineAliases = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
@@ -137,6 +138,20 @@ public sealed class CorrectionHistoryService
         string callsign = entry.ExpectedCommand.Split(
             ' ',
             StringSplitOptions.RemoveEmptyEntries)[0];
+        string airlineCode = new(
+            callsign.TakeWhile(char.IsLetter).ToArray());
+        Dictionary<string, string> relevantAliases = callsign.StartsWith('N')
+            ? new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase)
+            : (airlineAliases ?? new Dictionary<string, string>())
+                .Where(pair => string.Equals(
+                    pair.Value,
+                    airlineCode,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value,
+                    StringComparer.OrdinalIgnoreCase);
         entry.ActiveStars.TryGetValue(callsign, out string? activeStar);
         string[] routeFixes = entry.ActiveRouteFixes.TryGetValue(
             callsign,
@@ -145,9 +160,12 @@ public sealed class CorrectionHistoryService
             : [];
 
         CorrectionRegressionCase regressionCase = new(
-            SchemaVersion: 1,
+            SchemaVersion:
+                CorrectionRegressionCaseValidator.CurrentSchemaVersion,
             AppVersion: appVersion,
             RecordedAtUtc: entry.RecordedAtUtc,
+            Callsign: callsign,
+            AirlineAliases: relevantAliases,
             OriginalTranscript: entry.OriginalTranscript,
             GeneratedCommand: entry.GeneratedCommand,
             WasBestEffort: entry.WasBestEffort,
@@ -157,6 +175,8 @@ public sealed class CorrectionHistoryService
             ControllerPosition: entry.ControllerPosition,
             ActiveStar: activeStar,
             RouteFixes: routeFixes);
+
+        CorrectionRegressionCaseValidator.Validate(regressionCase);
 
         string fullPath = Path.GetFullPath(destinationPath);
         string? directory = Path.GetDirectoryName(fullPath);

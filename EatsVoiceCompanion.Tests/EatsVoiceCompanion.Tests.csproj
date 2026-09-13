@@ -25,4 +25,10 @@
     <ProjectReference Include="..\EatsVoiceCompanion.Core\EatsVoiceCompanion.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\regression-cases\speech\*.json"
+          Link="RegressionCases\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

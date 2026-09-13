@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gagostin1/eATS-Voice-Companion/blob/main/regression-cases/schema-v2.json",
+  "title": "eATS Voice Companion speech regression case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "SchemaVersion",
+    "AppVersion",
+    "RecordedAtUtc",
+    "Callsign",
+    "AirlineAliases",
+    "OriginalTranscript",
+    "WasBestEffort",
+    "CorrectedTranscript",
+    "ExpectedCommand",
+    "ControllerPosition",
+    "RouteFixes"
+  ],
+  "properties": {
+    "SchemaVersion": { "const": 2 },
+    "AppVersion": { "type": "string", "minLength": 1 },
+    "RecordedAtUtc": { "type": "string", "format": "date-time" },
+    "Callsign": { "type": "string", "pattern": "^[A-Z0-9]+$" },
+    "AirlineAliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Z0-9]+$"
+      }
+    },
+    "OriginalTranscript": { "type": "string", "minLength": 1 },
+    "GeneratedCommand": { "type": ["string", "null"] },
+    "WasBestEffort": { "type": "boolean" },
+    "CorrectedTranscript": { "type": "string", "minLength": 1 },
+    "ExpectedCommand": { "type": "string", "minLength": 1 },
+    "ControllerPosition": { "type": "string" },
+    "ActiveStar": { "type": ["string", "null"] },
+    "RouteFixes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z0-9]+$" }
+    }
+  }
+}

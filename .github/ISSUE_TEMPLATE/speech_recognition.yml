@@ -35,6 +35,13 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: regression_case
+    attributes:
+      label: Exported regression case
+      description: Drag the reviewed JSON from History here. It excludes audio and local paths. You may review the file before attaching it.
+      placeholder: Drag and drop the exported .json file here, if available.
+
   - type: input
     id: expected_command
     attributes:
@@ -89,3 +96,5 @@ body:
           required: true
         - label: I verified that the expected command uses currently supported syntax.
           required: true
+        - label: I reviewed any attached regression JSON and am comfortable sharing its transcript and relevant scenario context publicly.
+          required: false

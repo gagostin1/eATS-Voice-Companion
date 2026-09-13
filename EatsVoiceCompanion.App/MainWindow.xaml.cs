@@ -1213,11 +1213,10 @@ public partial class MainWindow : Window
             CorrectionHistoryListBox.SelectedItem is not null;
         ToggleHistoryLearningButton.IsEnabled =
             !isBusy &&
-            CorrectionHistoryListBox.SelectedItem is
-                CorrectionHistoryEntry
-                {
-                    ReviewStatus: not CorrectionReviewStatus.Unreviewed
-                };
+            CorrectionHistoryListBox.SelectedItem is CorrectionHistoryEntry
+            {
+                ReviewStatus: not CorrectionReviewStatus.Unreviewed
+            };
         DeleteHistoryEntryButton.IsEnabled =
             !isBusy && CorrectionHistoryListBox.SelectedItem is not null;
         CancelTranscriptionButton.IsEnabled = isBusy;
@@ -1881,7 +1880,8 @@ public partial class MainWindow : Window
             _correctionHistoryService.ExportRegressionCase(
                 entry,
                 dialog.FileName,
-                appVersion);
+                appVersion,
+                _airlineAliases);
             HistoryDetailStatusText.Foreground = Brushes.ForestGreen;
             HistoryDetailStatusText.Text =
                 $"Sanitized regression case exported to {dialog.FileName}";

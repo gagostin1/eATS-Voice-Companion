@@ -112,12 +112,23 @@ public sealed class CorrectionHistoryServiceTests : IDisposable
         entry.ExpectedCommand = "DAL123 FH270";
         string path = Path.Combine(_directory, "regression.json");
 
-        service.ExportRegressionCase(entry, path, "0.3.0");
+        service.ExportRegressionCase(
+            entry,
+            path,
+            "0.3.0",
+            new Dictionary<string, string>
+            {
+                ["DELTA"] = "DAL",
+                ["AMERICAN"] = "AAL"
+            });
         string json = File.ReadAllText(path);
 
         Assert.Contains("DAL123 FH270", json, StringComparison.Ordinal);
         Assert.Contains("BANKR5", json, StringComparison.Ordinal);
         Assert.Contains("HOMER", json, StringComparison.Ordinal);
+        Assert.Contains("\"SchemaVersion\": 2", json, StringComparison.Ordinal);
+        Assert.Contains("\"DELTA\": \"DAL\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("AMERICAN", json, StringComparison.Ordinal);
         Assert.DoesNotContain(
             entry.RecordingFilePath,
             json,

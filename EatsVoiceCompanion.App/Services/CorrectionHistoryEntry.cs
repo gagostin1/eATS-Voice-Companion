@@ -66,6 +66,8 @@ public sealed record CorrectionRegressionCase(
     int SchemaVersion,
     string AppVersion,
     DateTime RecordedAtUtc,
+    string Callsign,
+    Dictionary<string, string> AirlineAliases,
     string OriginalTranscript,
     string? GeneratedCommand,
     bool WasBestEffort,

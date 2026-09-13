@@ -1,0 +1,23 @@
+{
+  "SchemaVersion": 2,
+  "AppVersion": "0.3.0",
+  "RecordedAtUtc": "2026-09-13T02:19:06.6352362Z",
+  "Callsign": "DAL1288",
+  "AirlineAliases": {
+    "DELTA": "DAL"
+  },
+  "OriginalTranscript": "Delta 1288, Atlanta Center, cross Aussie at and maintain 1-3,000, the Atlanta Altimeter 2-9 or 9 or 2.",
+  "GeneratedCommand": "DAL1288 R",
+  "WasBestEffort": true,
+  "CorrectedTranscript": "Delta 1288, Atlanta Center, cross OZZZI at and maintain 13,000, the Atlanta Altimeter 29.92.",
+  "ExpectedCommand": "DAL1288 XOZZZI@130 A2992",
+  "ControllerPosition": "Atlanta Center",
+  "ActiveStar": null,
+  "RouteFixes": [
+    "BTTIS",
+    "DGESS",
+    "HAARY",
+    "OZZZI",
+    "WINNG"
+  ]
+}

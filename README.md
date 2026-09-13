@@ -52,6 +52,7 @@ Read [Safety and limitations](docs/SAFETY_AND_LIMITATIONS.md) for the detailed o
 ## Documentation and support
 
 - [Supported commands and examples](docs/COMMAND_CATALOG.md)
+- [Contribute an exported speech regression case](docs/CONTRIBUTING_REGRESSION_CASES.md)
 - [Safety and limitations](docs/SAFETY_AND_LIMITATIONS.md)
 - [Changelog](CHANGELOG.md)
 - [Report a bug](https://github.com/gagostin1/eATS-Voice-Companion/issues/new?template=bug_report.yml)
