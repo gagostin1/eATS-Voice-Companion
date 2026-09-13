@@ -8,6 +8,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- A first-run, no-eATS-required voice setup wizard configures the microphone and pass-through PTT hotkey, automatically compares ten varied ATC phrases, feeds mismatches into local correction memory, and presents a completion summary
 - Versioned, sanitized speech-regression JSON exports that run automatically as data-driven CI tests, plus a contribution guide and issue-form attachment path
 - Local adaptive correction memory feeds reviewed phrases back into Whisper prompts and learns route-gated fix aliases without changing the bundled model
 - History controls show learned mappings and allow individual exclusions, attempt deletion, or clearing learned memory without deleting retained recordings

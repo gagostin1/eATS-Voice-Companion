@@ -5,6 +5,8 @@ namespace EatsVoiceCompanion.App.Configuration;
 
 public sealed class CompanionSettings
 {
+    public const int CurrentVoiceCalibrationVersion = 1;
+
     public string ControllerPosition { get; set; } = "Atlanta Center";
 
     public string EatsDataDirectory { get; set; } = GetDefaultEatsDataDirectory();
@@ -24,6 +26,8 @@ public sealed class CompanionSettings
     public bool ContributionNoticeShown { get; set; }
 
     public string? PushToTalkHotkey { get; set; }
+
+    public int VoiceCalibrationVersion { get; set; }
 
     public static string GetDefaultEatsDataDirectory()
     {
@@ -62,6 +66,13 @@ public sealed class CompanionSettings
             throw new ArgumentOutOfRangeException(
                 nameof(MaximumSavedRecordings),
                 "Maximum saved recordings must be between 1 and 1,000.");
+        }
+
+        if (VoiceCalibrationVersion < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(VoiceCalibrationVersion),
+                "The voice-calibration version cannot be negative.");
         }
 
         EatsDataDirectory = Path.GetFullPath(EatsDataDirectory.Trim());

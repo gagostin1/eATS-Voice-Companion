@@ -1,0 +1,203 @@
+<Window x:Class="EatsVoiceCompanion.App.VoiceCalibrationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Voice setup"
+        Width="760"
+        Height="720"
+        MinWidth="680"
+        MinHeight="650"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="#FFF4F7FB"
+        FontFamily="Segoe UI"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewKeyUp="Window_PreviewKeyUp">
+    <Window.Resources>
+        <SolidColorBrush x:Key="TextBrush" Color="#FF122033"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF526581"/>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="18,9"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="18,9"/>
+            <Setter Property="Background" Value="#FF2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="18,9"/>
+            <Setter Property="Background" Value="#FFE8EEF7"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Padding="28,22" Background="#FF0F172A">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Foreground="White" FontSize="24"
+                               FontWeight="SemiBold" Text="Set up your voice controls"/>
+                    <TextBlock Margin="0,6,0,0" Foreground="#FFBFDBFE"
+                               Text="No eATS connection is needed, and calibration commands are never staged."
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                <TextBlock x:Name="StepText" Grid.Column="1"
+                           VerticalAlignment="Center" Foreground="#FF93C5FD"
+                           FontWeight="SemiBold" Text="SETUP"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="28,22,28,26">
+            <StackPanel x:Name="DeviceSetupPanel">
+                <TextBlock Foreground="{StaticResource TextBrush}" FontSize="21"
+                           FontWeight="SemiBold" Text="Microphone and push-to-talk"/>
+                <TextBlock Margin="0,6,0,22" Foreground="{StaticResource MutedBrush}"
+                           Text="Choose the microphone you use for controlling traffic, then assign the key you want to hold while speaking."
+                           TextWrapping="Wrap"/>
+
+                <Border Padding="20" Background="White" BorderBrush="#FFE2E8F0"
+                        BorderThickness="1" CornerRadius="10">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Microphone"/>
+                        <ComboBox x:Name="MicrophoneComboBox" MinHeight="38"
+                                  DisplayMemberPath="DisplayName"/>
+                        <Button Margin="0,12,0,0" HorizontalAlignment="Left"
+                                Click="RefreshMicrophones_Click" Content="Refresh devices"
+                                Style="{StaticResource SecondaryButton}"/>
+                        <TextBlock x:Name="MicrophoneStatusText" Margin="0,9,0,0"
+                                   Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+
+                        <TextBlock Margin="0,22,0,6" Style="{StaticResource FieldLabel}"
+                                   Text="Push-to-talk hotkey"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="HotkeyTextBox" MinHeight="38" IsReadOnly="True"
+                                     VerticalContentAlignment="Center" Text="Not assigned"/>
+                            <Button x:Name="AssignHotkeyButton" Grid.Column="1"
+                                    Margin="10,0,0,0" Click="AssignHotkey_Click"
+                                    Content="Assign" Style="{StaticResource SecondaryButton}"/>
+                        </Grid>
+                        <TextBlock x:Name="HotkeyStatusText" Margin="0,9,0,0"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   Text="Your hotkey continues through to other applications."
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Margin="0,22,0,0" HorizontalAlignment="Right"
+                            Orientation="Horizontal">
+                    <Button Click="Postpone_Click" Content="Finish later"
+                            Style="{StaticResource SecondaryButton}"/>
+                    <Button Margin="10,0,0,0" Click="BeginCalibration_Click"
+                            Content="Start calibration" Style="{StaticResource PrimaryButton}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <Grid x:Name="CalibrationPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="PhraseProgressText" Foreground="#FF2563EB"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,7,0,0" Foreground="{StaticResource TextBrush}"
+                               FontSize="20" FontWeight="SemiBold"
+                               Text="Hold PTT and read this phrase"/>
+                    <Border Margin="0,14,0,0" Padding="20" Background="White"
+                            BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="10">
+                        <TextBlock x:Name="CalibrationPhraseText" FontSize="19"
+                                   FontWeight="SemiBold" LineHeight="29"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap"/>
+                    </Border>
+                    <Button x:Name="CalibrationRecordButton" Margin="0,18,0,0"
+                            Width="280" Height="58" HorizontalAlignment="Left"
+                            PreviewMouseLeftButtonDown="CalibrationRecordButton_MouseDown"
+                            PreviewMouseLeftButtonUp="CalibrationRecordButton_MouseUp"
+                            Content="Hold to record" Style="{StaticResource PrimaryButton}"/>
+                    <TextBlock x:Name="CalibrationStatusText" Margin="0,10,0,0"
+                               Foreground="{StaticResource MutedBrush}"
+                               Text="Use the assigned PTT key or hold the button."
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <Border x:Name="ResultPanel" Grid.Row="1" Margin="0,18,0,0"
+                        Padding="18" Background="#FFF8FAFC" BorderBrush="#FFE2E8F0"
+                        BorderThickness="1" CornerRadius="10" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="ComparisonHeadingText" FontSize="17"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Margin="0,12,0,4" Style="{StaticResource FieldLabel}"
+                                   Text="Recognized"/>
+                        <TextBlock x:Name="RecognizedTranscriptText" Foreground="{StaticResource TextBrush}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Margin="0,12,0,4" Style="{StaticResource FieldLabel}"
+                                   Text="Generated / expected"/>
+                        <TextBlock x:Name="CommandComparisonText" FontFamily="Consolas"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="LearningExplanationText" Margin="0,10,0,0"
+                                   Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="2" Margin="0,18,0,0">
+                    <Button x:Name="SkipPhraseButton" HorizontalAlignment="Left"
+                            Click="SkipPhrase_Click"
+                            Content="Skip this phrase" Style="{StaticResource SecondaryButton}"/>
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button x:Name="RetryButton" Click="RetryPhrase_Click"
+                                Content="Retry" IsEnabled="False"
+                                Style="{StaticResource SecondaryButton}"/>
+                        <Button x:Name="NextPhraseButton" Margin="10,0,0,0"
+                                Click="NextPhrase_Click" Content="Continue"
+                                IsEnabled="False" Style="{StaticResource PrimaryButton}"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <StackPanel x:Name="SummaryPanel" Visibility="Collapsed">
+                <TextBlock Foreground="{StaticResource TextBrush}" FontSize="22"
+                           FontWeight="SemiBold" Text="Voice setup complete"/>
+                <TextBlock Margin="0,7,0,22" Foreground="{StaticResource MutedBrush}"
+                           Text="Your microphone and push-to-talk key are ready. Any recognition differences have been added to local learning."
+                           TextWrapping="Wrap"/>
+                <Border Padding="22" Background="White" BorderBrush="#FFE2E8F0"
+                        BorderThickness="1" CornerRadius="10">
+                    <StackPanel>
+                        <TextBlock x:Name="SummaryResultText" FontSize="18"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap"/>
+                        <TextBlock Margin="0,14,0,0" Foreground="{StaticResource MutedBrush}"
+                                   Text="Matched phrases confirm the recognizer is working. Corrected phrases teach the app useful local speech patterns and vocabulary. You can run calibration again from Settings."
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+                <Button Margin="0,24,0,0" HorizontalAlignment="Right"
+                        Click="Finish_Click" Content="Open eATS Voice Companion"
+                        Style="{StaticResource PrimaryButton}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

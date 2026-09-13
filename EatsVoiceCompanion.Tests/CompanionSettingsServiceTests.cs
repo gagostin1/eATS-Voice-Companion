@@ -25,7 +25,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             AutomaticallyStageVerifiedCommands = false,
             ParticipateInRecognitionImprovement = false,
             ContributionNoticeShown = true,
-            PushToTalkHotkey = "Ctrl+Shift+F9"
+            PushToTalkHotkey = "Ctrl+Shift+F9",
+            VoiceCalibrationVersion = 1
         };
 
         service.Save(expected);
@@ -47,6 +48,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             expected.ContributionNoticeShown,
             actual.ContributionNoticeShown);
         Assert.Equal(expected.PushToTalkHotkey, actual.PushToTalkHotkey);
+        Assert.Equal(
+            expected.VoiceCalibrationVersion,
+            actual.VoiceCalibrationVersion);
     }
 
     [Fact]
@@ -64,6 +68,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
         Assert.Null(result.PushToTalkHotkey);
+        Assert.Equal(0, result.VoiceCalibrationVersion);
     }
 
     [Fact]

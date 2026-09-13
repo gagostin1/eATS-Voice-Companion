@@ -34,8 +34,8 @@ Requires Windows 11 (x64), eATS, a microphone, the Microsoft Visual C++ 2022 Red
 1. Download `EatsVoiceCompanion-win-x64.zip` from the [latest release](https://github.com/gagostin1/eATS-Voice-Companion/releases/latest).
 2. Extract the entire archive to a normal folder.
 3. Run `EatsVoiceCompanion.App.exe`.
-4. Open **Settings**, choose your microphone and push-to-talk key, and confirm the eATS data directory.
-5. Select **Detect eATS**, then **Save settings**.
+4. Complete the first-run microphone, push-to-talk, and local voice calibration wizard. eATS does not need to be open for this step.
+5. Open **Settings**, confirm the eATS data directory, select **Detect eATS**, then **Save all settings**.
 6. Hold push-to-talk, speak, release, and review the staged command in eATS before pressing Enter.
 
 The release is self-contained; no separate .NET installation is required. The Whisper model downloads on first use, so the first transcription needs an internet connection and takes longer than later ones.

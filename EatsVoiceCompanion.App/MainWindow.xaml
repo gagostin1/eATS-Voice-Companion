@@ -724,6 +724,11 @@
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="Choose Assign, then press a key or key combination."
                                                TextWrapping="Wrap"/>
+                                    <Button Margin="0,18,0,0"
+                                            HorizontalAlignment="Left"
+                                            Click="RunVoiceCalibration_Click"
+                                            Content="Run voice setup again"
+                                            Style="{StaticResource BaseButtonStyle}"/>
                                 </StackPanel>
                             </Border>
 

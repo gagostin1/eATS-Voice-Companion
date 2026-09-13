@@ -208,7 +208,9 @@ public partial class MainWindow : Window
                     RecognitionImprovementCheckBox.IsChecked == true,
                 ContributionNoticeShown =
                     _settings.ContributionNoticeShown,
-                PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString()
+                PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString(),
+                VoiceCalibrationVersion =
+                    _settings.VoiceCalibrationVersion
             };
 
             _settingsService.Save(updated);
@@ -258,6 +260,12 @@ public partial class MainWindow : Window
     {
         Loaded -= MainWindow_Loaded;
 
+        if (_settings.VoiceCalibrationVersion <
+            CompanionSettings.CurrentVoiceCalibrationVersion)
+        {
+            RunVoiceCalibration();
+        }
+
         if (_settings.ContributionNoticeShown)
         {
             return;
@@ -293,6 +301,77 @@ public partial class MainWindow : Window
                 "The first-run contribution preference could not be saved.",
                 exception);
         }
+    }
+
+    private void RunVoiceCalibration_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_audioRecorder.IsRecording ||
+            _transcriptionCancellation is not null ||
+            _isStagingCommand)
+        {
+            SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
+            SettingsStatusText.Text =
+                "Wait for the current voice operation to finish before " +
+                "starting calibration.";
+            return;
+        }
+
+        RunVoiceCalibration();
+    }
+
+    private void RunVoiceCalibration()
+    {
+        DisposePushToTalkHotkeyService();
+
+        VoiceCalibrationWindow calibration = new(
+            _microphoneService,
+            _recordingStorage,
+            _speechRecognitionService,
+            _correctionHistoryService,
+            _settings.PreferredMicrophoneName,
+            _settings.PushToTalkHotkey)
+        {
+            Owner = this
+        };
+
+        _ = calibration.ShowDialog();
+
+        if (calibration.Completed)
+        {
+            _settings.PreferredMicrophoneName =
+                calibration.SelectedMicrophoneName;
+            _settings.PushToTalkHotkey = calibration.PushToTalkHotkey;
+            _settings.VoiceCalibrationVersion =
+                CompanionSettings.CurrentVoiceCalibrationVersion;
+
+            try
+            {
+                _settingsService.Save(_settings);
+                ApplySettingsToUi();
+                LoadMicrophones();
+                RefreshCorrectionHistory();
+                BuildRecognitionContext();
+                SettingsStatusText.Foreground = Brushes.ForestGreen;
+                SettingsStatusText.Text =
+                    "Voice setup completed. Microphone, PTT, and local " +
+                    "calibration results were saved.";
+            }
+            catch (Exception exception)
+            {
+                SettingsStatusText.Foreground = Brushes.Firebrick;
+                SettingsStatusText.Text =
+                    $"Voice setup finished but settings could not be saved: " +
+                    exception.Message;
+                _logger.Error(
+                    "VoiceCalibrationSaveFailed",
+                    "Voice calibration settings could not be saved.",
+                    exception);
+            }
+        }
+
+        InitializePushToTalkHotkey();
     }
 
     private static int ParseSetting(
@@ -823,6 +902,8 @@ public partial class MainWindow : Window
 
     private void InitializePushToTalkHotkey()
     {
+        DisposePushToTalkHotkeyService();
+
         try
         {
             _pushToTalkHotkeyService =
@@ -847,6 +928,21 @@ public partial class MainWindow : Window
                 "The global push-to-talk keyboard listener could not start.",
                 exception);
         }
+    }
+
+    private void DisposePushToTalkHotkeyService()
+    {
+        if (_pushToTalkHotkeyService is null)
+        {
+            return;
+        }
+
+        _pushToTalkHotkeyService.Pressed -=
+            PushToTalkHotkeyService_Pressed;
+        _pushToTalkHotkeyService.Released -=
+            PushToTalkHotkeyService_Released;
+        _pushToTalkHotkeyService.Dispose();
+        _pushToTalkHotkeyService = null;
     }
 
     private void PushToTalkHotkeyService_Pressed(
@@ -2257,11 +2353,7 @@ public partial class MainWindow : Window
             AudioRecorder_RecordingCompleted;
         if (_pushToTalkHotkeyService is not null)
         {
-            _pushToTalkHotkeyService.Pressed -=
-                PushToTalkHotkeyService_Pressed;
-            _pushToTalkHotkeyService.Released -=
-                PushToTalkHotkeyService_Released;
-            _pushToTalkHotkeyService.Dispose();
+            DisposePushToTalkHotkeyService();
         }
 
         _audioRecorder.Dispose();
