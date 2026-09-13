@@ -9,6 +9,7 @@ using EatsVoiceCompanion.App.Services;
 using EatsVoiceCompanion.Core.Commands;
 using EatsVoiceCompanion.Core.Safety;
 using EatsVoiceCompanion.Core.Speech;
+using Microsoft.Win32;
 
 namespace EatsVoiceCompanion.App;
 
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
     private readonly AudioRecorder _audioRecorder;
     private readonly SpeechRecognitionService _speechRecognitionService;
     private readonly EatsCommandStager _commandStager;
+    private readonly CorrectionHistoryService _correctionHistoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
     private CompanionSettings _settings;
@@ -66,6 +68,8 @@ public partial class MainWindow : Window
     private bool _isCapturingPushToTalkHotkey;
     private Key? _modifierHotkeyCandidate;
     private bool _recordingStartedByHotkey;
+    private IReadOnlyList<CorrectionHistoryEntry> _correctionHistory = [];
+    private Guid? _currentVoiceHistoryEntryId;
 
     public MainWindow()
     {
@@ -81,10 +85,12 @@ public partial class MainWindow : Window
         _speechRecognitionService = new SpeechRecognitionService(
             logger: _logger);
         _commandStager = new EatsCommandStager();
+        _correctionHistoryService = new CorrectionHistoryService();
 
         InitializeComponent();
         FitWindowToWorkArea();
         ApplySettingsToUi();
+        Loaded += MainWindow_Loaded;
         InitializePushToTalkHotkey();
         ConfigureEatsDataServices();
 
@@ -95,6 +101,7 @@ public partial class MainWindow : Window
 
         LoadMicrophones();
         BuildRecognitionContext();
+        RefreshCorrectionHistory();
 
         _logger.Information(
             "ApplicationStarted",
@@ -146,6 +153,8 @@ public partial class MainWindow : Window
             _settings.MaximumSavedRecordings.ToString();
         AutoStageCommandsCheckBox.IsChecked =
             _settings.AutomaticallyStageVerifiedCommands;
+        RecognitionImprovementCheckBox.IsChecked =
+            _settings.ParticipateInRecognitionImprovement;
         PushToTalkHotkeyDefinition.TryParse(
             _settings.PushToTalkHotkey,
             out _pendingPushToTalkHotkey);
@@ -193,11 +202,18 @@ public partial class MainWindow : Window
                     (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name,
                 AutomaticallyStageVerifiedCommands =
                     AutoStageCommandsCheckBox.IsChecked == true,
+                ParticipateInRecognitionImprovement =
+                    RecognitionImprovementCheckBox.IsChecked == true,
+                ContributionNoticeShown =
+                    _settings.ContributionNoticeShown,
                 PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString()
             };
 
             _settingsService.Save(updated);
             _settings = updated;
+            ShowCorrectionHistoryEntry(
+                CorrectionHistoryListBox.SelectedItem as
+                    CorrectionHistoryEntry);
             if (_pushToTalkHotkeyService is not null)
             {
                 _pushToTalkHotkeyService.Hotkey =
@@ -230,6 +246,49 @@ public partial class MainWindow : Window
             _logger.Error(
                 "SettingsSaveFailed",
                 "Application settings could not be saved.",
+                exception);
+        }
+    }
+
+    private void MainWindow_Loaded(
+        object sender,
+        RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+
+        if (_settings.ContributionNoticeShown)
+        {
+            return;
+        }
+
+        ContributionNoticeWindow notice = new(
+            _settings.ParticipateInRecognitionImprovement)
+        {
+            Owner = this
+        };
+
+        _ = notice.ShowDialog();
+
+        _settings.ParticipateInRecognitionImprovement =
+            notice.ParticipationEnabled;
+        _settings.ContributionNoticeShown = true;
+        RecognitionImprovementCheckBox.IsChecked =
+            notice.ParticipationEnabled;
+
+        try
+        {
+            _settingsService.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
+            SettingsStatusText.Text =
+                "Your contribution preference could not be saved. " +
+                "Choose Save all settings to try again.";
+
+            _logger.Error(
+                "ContributionPreferenceSaveFailed",
+                "The first-run contribution preference could not be saved.",
                 exception);
         }
     }
@@ -685,6 +744,7 @@ public partial class MainWindow : Window
                 microphone.DeviceNumber);
 
             _recordingStartedByHotkey = !captureMouse;
+            _currentVoiceHistoryEntryId = null;
 
             SaveSettingsButton.IsEnabled = false;
             InterpretTranscriptButton.IsEnabled = false;
@@ -1061,6 +1121,10 @@ public partial class MainWindow : Window
                 BuildVoicePreview(
                     transcript,
                     refreshRecognitionContext: false);
+                SaveVoiceAttemptToHistory(
+                    e.FilePath,
+                    transcript,
+                    workflow.ContextAfterTranscription);
             });
 
             _logger.Information(
@@ -1132,6 +1196,18 @@ public partial class MainWindow : Window
         SaveSettingsButton.IsEnabled = !isBusy && !_isStagingCommand;
         InterpretTranscriptButton.IsEnabled = !isBusy && !_isStagingCommand;
         GenerateCommandButton.IsEnabled = !isBusy && !_isStagingCommand;
+        ReplayHistoryButton.IsEnabled =
+            !isBusy &&
+            !_isStagingCommand &&
+            CorrectionHistoryListBox.SelectedItem is not null;
+        MarkHistoryCorrectButton.IsEnabled =
+            !isBusy && CorrectionHistoryListBox.SelectedItem is not null;
+        SaveHistoryCorrectionButton.IsEnabled =
+            !isBusy && CorrectionHistoryListBox.SelectedItem is not null;
+        ExportHistoryButton.IsEnabled =
+            !isBusy &&
+            _settings.ParticipateInRecognitionImprovement &&
+            CorrectionHistoryListBox.SelectedItem is not null;
         CancelTranscriptionButton.IsEnabled = isBusy;
         CancelTranscriptionButton.Content = "Cancel transcription";
     }
@@ -1147,7 +1223,520 @@ public partial class MainWindow : Window
             return;
         }
 
-        BuildVoicePreview(TranscriptText.Text);
+        string correctedTranscript = TranscriptText.Text;
+        BuildVoicePreview(correctedTranscript);
+        SaveCurrentVoiceCorrection(correctedTranscript);
+    }
+
+    private void SaveVoiceAttemptToHistory(
+        string recordingFilePath,
+        string transcript,
+        RecognitionContextResult context)
+    {
+        try
+        {
+            CorrectionHistoryEntry entry = new()
+            {
+                RecordingFilePath = recordingFilePath,
+                OriginalTranscript = transcript,
+                GeneratedCommand = TryGetValidatedPreviewCommand(),
+                WasBestEffort = _currentPreviewWasRecovered,
+                ControllerPosition = ControllerPositionTextBox.Text.Trim(),
+                RecognitionPrompt = context.Prompt,
+                ActiveCallsigns = context.ActiveCallsigns
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                ActiveStars = context.ActiveStars.ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value,
+                    StringComparer.OrdinalIgnoreCase),
+                ActiveRouteFixes = context.ActiveRouteFixes.ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value
+                        .OrderBy(
+                            value => value,
+                            StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase)
+            };
+
+            _correctionHistoryService.Save(entry);
+            _currentVoiceHistoryEntryId = entry.Id;
+            RefreshCorrectionHistory(entry.Id);
+        }
+        catch (Exception exception)
+        {
+            _logger.Error(
+                "CorrectionHistorySaveFailed",
+                "The completed voice attempt could not be added to history.",
+                exception);
+        }
+    }
+
+    private void SaveCurrentVoiceCorrection(string correctedTranscript)
+    {
+        if (_currentVoiceHistoryEntryId is not { } entryId)
+        {
+            return;
+        }
+
+        CorrectionHistoryEntry? entry = _correctionHistory.FirstOrDefault(
+            item => item.Id == entryId);
+
+        if (entry is null ||
+            string.Equals(
+                correctedTranscript.Trim(),
+                entry.OriginalTranscript.Trim(),
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        entry.CorrectedTranscript = correctedTranscript.Trim();
+        string? command = TryGetValidatedPreviewCommand();
+
+        if (command is not null)
+        {
+            entry.ExpectedCommand = command;
+            entry.ReviewStatus = CorrectionReviewStatus.Corrected;
+        }
+
+        try
+        {
+            _correctionHistoryService.Save(entry);
+            RefreshCorrectionHistory(entry.Id);
+        }
+        catch (Exception exception)
+        {
+            _logger.Error(
+                "CorrectionHistoryUpdateFailed",
+                "An interpreted transcript correction could not be saved.",
+                exception);
+        }
+    }
+
+    private string? TryGetValidatedPreviewCommand()
+    {
+        try
+        {
+            return EatsTransmissionValidator.Validate(PreviewText.Text);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private void RefreshHistory_Click(
+        object sender,
+        RoutedEventArgs e) => RefreshCorrectionHistory();
+
+    private void RefreshCorrectionHistory(Guid? selectedId = null)
+    {
+        try
+        {
+            selectedId ??=
+                (CorrectionHistoryListBox.SelectedItem as
+                    CorrectionHistoryEntry)?.Id;
+            _correctionHistory = _correctionHistoryService.Load();
+            CorrectionHistoryListBox.ItemsSource = _correctionHistory;
+            HistoryCountText.Foreground = Brushes.DimGray;
+            HistoryCountText.Text = _correctionHistory.Count == 0
+                ? "No saved attempts yet."
+                : $"{_correctionHistory.Count} local attempt(s). Audio " +
+                  "availability follows recording-retention settings.";
+
+            CorrectionHistoryEntry? selected = selectedId is null
+                ? _correctionHistory.FirstOrDefault()
+                : _correctionHistory.FirstOrDefault(
+                    entry => entry.Id == selectedId);
+            CorrectionHistoryListBox.SelectedItem = selected;
+            ShowCorrectionHistoryEntry(selected);
+        }
+        catch (Exception exception)
+        {
+            HistoryCountText.Foreground = Brushes.Firebrick;
+            HistoryCountText.Text =
+                $"Correction history could not be loaded: {exception.Message}";
+            _logger.Error(
+                "CorrectionHistoryLoadFailed",
+                "Local correction history could not be loaded.",
+                exception);
+        }
+    }
+
+    private void CorrectionHistoryList_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        ShowCorrectionHistoryEntry(
+            CorrectionHistoryListBox.SelectedItem as
+                CorrectionHistoryEntry);
+    }
+
+    private void ShowCorrectionHistoryEntry(CorrectionHistoryEntry? entry)
+    {
+        bool hasEntry = entry is not null;
+        MarkHistoryCorrectButton.IsEnabled = hasEntry;
+        SaveHistoryCorrectionButton.IsEnabled = hasEntry;
+        ExportHistoryButton.IsEnabled =
+            hasEntry && _settings.ParticipateInRecognitionImprovement;
+        ReplayHistoryButton.IsEnabled =
+            hasEntry &&
+            _transcriptionCancellation is null &&
+            !_audioRecorder.IsRecording &&
+            !_isStagingCommand;
+
+        if (entry is null)
+        {
+            HistoryDetailStatusText.Text =
+                "Select an attempt from the history.";
+            HistoryOriginalTranscriptTextBox.Text = string.Empty;
+            HistoryOriginalCommandTextBox.Text = string.Empty;
+            HistoryCorrectedTranscriptTextBox.Text = string.Empty;
+            HistoryExpectedCommandTextBox.Text = string.Empty;
+            HistoryReplayResultText.Text =
+                "This attempt has not been replayed.";
+            HistoryReplayResultText.Foreground = Brushes.DimGray;
+            return;
+        }
+
+        bool hasAudio = File.Exists(entry.RecordingFilePath);
+        HistoryDetailStatusText.Foreground = Brushes.DimGray;
+        HistoryDetailStatusText.Text =
+            $"{entry.RecordedAtUtc.ToLocalTime():F} · " +
+            $"{entry.ReviewStatus} · " +
+            (hasAudio ? "Audio available" : "Audio expired or missing");
+        HistoryOriginalTranscriptTextBox.Text = entry.OriginalTranscript;
+        HistoryOriginalCommandTextBox.Text =
+            entry.GeneratedCommand ?? "No valid command was generated.";
+        HistoryCorrectedTranscriptTextBox.Text =
+            entry.CorrectedTranscript ?? entry.OriginalTranscript;
+        HistoryExpectedCommandTextBox.Text =
+            entry.ExpectedCommand ?? entry.GeneratedCommand ?? string.Empty;
+
+        if (entry.LastReplayedAtUtc is null)
+        {
+            HistoryReplayResultText.Text =
+                "This attempt has not been replayed.";
+            HistoryReplayResultText.Foreground = Brushes.DimGray;
+            return;
+        }
+
+        string replayResult = entry.LatestReplayError is not null
+            ? $"Replay failed: {entry.LatestReplayError}"
+            : $"Transcript: {entry.LatestReplayTranscript}\n" +
+              $"Command: {entry.LatestReplayCommand ?? "No command"}";
+        string? expected = entry.ExpectedCommand ?? entry.GeneratedCommand;
+
+        if (entry.LatestReplayError is null && expected is not null)
+        {
+            bool matches = string.Equals(
+                expected,
+                entry.LatestReplayCommand,
+                StringComparison.Ordinal);
+            replayResult += matches
+                ? "\nPASS: replay matches the expected command."
+                : $"\nDIFFERS: expected {expected}.";
+            HistoryReplayResultText.Foreground = matches
+                ? Brushes.ForestGreen
+                : Brushes.DarkGoldenrod;
+        }
+        else
+        {
+            HistoryReplayResultText.Foreground =
+                entry.LatestReplayError is null
+                    ? Brushes.DimGray
+                    : Brushes.Firebrick;
+        }
+
+        HistoryReplayResultText.Text = replayResult;
+    }
+
+    private void MarkHistoryCorrect_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+            CorrectionHistoryEntry entry)
+        {
+            return;
+        }
+
+        if (entry.GeneratedCommand is null)
+        {
+            HistoryDetailStatusText.Foreground = Brushes.Firebrick;
+            HistoryDetailStatusText.Text =
+                "This attempt did not generate a command. Enter the " +
+                "expected command and save it as a correction instead.";
+            return;
+        }
+
+        entry.CorrectedTranscript = entry.OriginalTranscript;
+        entry.ExpectedCommand = entry.GeneratedCommand;
+        entry.ReviewStatus = CorrectionReviewStatus.Correct;
+        SaveReviewedHistoryEntry(entry, "Marked correct.");
+    }
+
+    private void SaveHistoryCorrection_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+            CorrectionHistoryEntry entry)
+        {
+            return;
+        }
+
+        try
+        {
+            string transcript =
+                HistoryCorrectedTranscriptTextBox.Text.Trim();
+            string command = EatsTransmissionValidator.Validate(
+                HistoryExpectedCommandTextBox.Text);
+
+            if (string.IsNullOrWhiteSpace(transcript))
+            {
+                throw new ArgumentException(
+                    "Enter the corrected transcript.");
+            }
+
+            entry.CorrectedTranscript = transcript;
+            entry.ExpectedCommand = command;
+            entry.ReviewStatus = CorrectionReviewStatus.Corrected;
+            SaveReviewedHistoryEntry(entry, "Correction saved locally.");
+        }
+        catch (Exception exception)
+        {
+            HistoryDetailStatusText.Foreground = Brushes.Firebrick;
+            HistoryDetailStatusText.Text = exception.Message;
+        }
+    }
+
+    private void SaveReviewedHistoryEntry(
+        CorrectionHistoryEntry entry,
+        string confirmation)
+    {
+        try
+        {
+            _correctionHistoryService.Save(entry);
+            RefreshCorrectionHistory(entry.Id);
+            HistoryDetailStatusText.Foreground = Brushes.ForestGreen;
+            HistoryDetailStatusText.Text = confirmation;
+        }
+        catch (Exception exception)
+        {
+            HistoryDetailStatusText.Foreground = Brushes.Firebrick;
+            HistoryDetailStatusText.Text =
+                $"The review could not be saved: {exception.Message}";
+            _logger.Error(
+                "CorrectionReviewSaveFailed",
+                "A correction-history review could not be saved.",
+                exception);
+        }
+    }
+
+    private async void ReplayHistory_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+                CorrectionHistoryEntry entry ||
+            _transcriptionCancellation is not null ||
+            _audioRecorder.IsRecording ||
+            _isStagingCommand)
+        {
+            return;
+        }
+
+        if (!File.Exists(entry.RecordingFilePath))
+        {
+            HistoryReplayResultText.Foreground = Brushes.Firebrick;
+            HistoryReplayResultText.Text =
+                "The retained WAV file has expired or is missing. The " +
+                "saved text case is still available for regression tests.";
+            return;
+        }
+
+        using CancellationTokenSource cancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+        _transcriptionCancellation = cancellation;
+        SetTranscriptionControls(isBusy: true);
+        HistoryReplayResultText.Foreground = Brushes.DarkGoldenrod;
+        HistoryReplayResultText.Text =
+            "Replaying the saved WAV through the current recognizer...";
+
+        IProgress<string> progress = new Progress<string>(message =>
+        {
+            if (!cancellation.IsCancellationRequested)
+            {
+                HistoryReplayResultText.Text = message;
+            }
+        });
+
+        try
+        {
+            RefreshHistoryContextForReplay(entry);
+
+            string transcript =
+                await _speechRecognitionService.TranscribeAsync(
+                    entry.RecordingFilePath,
+                    progress,
+                    entry.RecognitionPrompt,
+                    cancellation.Token);
+
+            IReadOnlySet<string> callsigns = new HashSet<string>(
+                entry.ActiveCallsigns,
+                StringComparer.OrdinalIgnoreCase);
+            IReadOnlyDictionary<string, IReadOnlySet<string>> routeFixes =
+                entry.ActiveRouteFixes.ToDictionary(
+                    pair => pair.Key,
+                    pair => (IReadOnlySet<string>)new HashSet<string>(
+                        pair.Value,
+                        StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+            VoiceCommandInterpretation interpretation =
+                _voiceCommandInterpreter.Interpret(
+                    transcript,
+                    entry.ControllerPosition,
+                    callsigns,
+                    entry.ActiveStars,
+                    routeFixes);
+
+            entry.LastReplayedAtUtc = DateTime.UtcNow;
+            entry.LatestReplayTranscript = transcript;
+            entry.LatestReplayCommand = EatsTransmissionValidator.Validate(
+                interpretation.Command.ToEatsCommand());
+            entry.LatestReplayError = null;
+        }
+        catch (OperationCanceledException)
+            when (cancellation.IsCancellationRequested)
+        {
+            entry.LastReplayedAtUtc = DateTime.UtcNow;
+            entry.LatestReplayError = "Replay was canceled.";
+        }
+        catch (Exception exception)
+        {
+            entry.LastReplayedAtUtc = DateTime.UtcNow;
+            entry.LatestReplayError = exception.Message;
+            _logger.Error(
+                "CorrectionHistoryReplayFailed",
+                "A saved voice attempt could not be replayed.",
+                exception);
+        }
+        finally
+        {
+            if (ReferenceEquals(_transcriptionCancellation, cancellation))
+            {
+                _transcriptionCancellation = null;
+            }
+
+            try
+            {
+                _correctionHistoryService.Save(entry);
+            }
+            catch (Exception exception)
+            {
+                _logger.Error(
+                    "CorrectionHistoryReplaySaveFailed",
+                    "The replay result could not be saved.",
+                    exception);
+            }
+
+            SetTranscriptionControls(isBusy: false);
+            RefreshCorrectionHistory(entry.Id);
+        }
+    }
+
+    private void RefreshHistoryContextForReplay(
+        CorrectionHistoryEntry entry)
+    {
+        string? expected = entry.ExpectedCommand ?? entry.GeneratedCommand;
+        string? callsign = expected?
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+
+        if (callsign is null)
+        {
+            return;
+        }
+
+        RecognitionContextResult current =
+            _recognitionContextService.Build(entry.ControllerPosition);
+
+        if (!current.ActiveCallsigns.Contains(callsign))
+        {
+            return;
+        }
+
+        entry.RecognitionPrompt = current.Prompt;
+        entry.ActiveCallsigns = current.ActiveCallsigns
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        entry.ActiveStars = current.ActiveStars.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
+        entry.ActiveRouteFixes = current.ActiveRouteFixes.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void ExportHistory_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (CorrectionHistoryListBox.SelectedItem is not
+            CorrectionHistoryEntry entry)
+        {
+            return;
+        }
+
+        if (!_settings.ParticipateInRecognitionImprovement)
+        {
+            HistoryDetailStatusText.Foreground = Brushes.DarkGoldenrod;
+            HistoryDetailStatusText.Text =
+                "Enable recognition-improvement participation in Settings " +
+                "before exporting a contribution-ready case.";
+            return;
+        }
+
+        try
+        {
+            SaveFileDialog dialog = new()
+            {
+                Title = "Export regression case",
+                Filter = "JSON files (*.json)|*.json",
+                DefaultExt = ".json",
+                AddExtension = true,
+                FileName = $"eats-recognition-{entry.Id:N}.json"
+            };
+
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            string appVersion =
+                typeof(MainWindow).Assembly.GetName().Version?
+                    .ToString(3) ?? "unknown";
+            _correctionHistoryService.ExportRegressionCase(
+                entry,
+                dialog.FileName,
+                appVersion);
+            HistoryDetailStatusText.Foreground = Brushes.ForestGreen;
+            HistoryDetailStatusText.Text =
+                $"Sanitized regression case exported to {dialog.FileName}";
+        }
+        catch (Exception exception)
+        {
+            HistoryDetailStatusText.Foreground = Brushes.Firebrick;
+            HistoryDetailStatusText.Text = exception.Message;
+        }
     }
 
     private void BuildVoicePreview(

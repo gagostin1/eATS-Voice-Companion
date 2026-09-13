@@ -115,7 +115,7 @@ public sealed class RecognitionContextServiceTests
     }
 
     [Fact]
-    public void Build_DropsStaleNamedStarContextButKeepsFreshSnapshot()
+    public void Build_KeepsRouteContextWhenLogHasNotRecentlyChanged()
     {
         RecognitionContextService service = CreateService(
             Process(),
@@ -132,8 +132,9 @@ public sealed class RecognitionContextServiceTests
         RecognitionContextResult result = service.Build("Atlanta Center");
 
         Assert.True(result.HasFreshSnapshot);
-        Assert.Empty(result.ActiveStars);
-        Assert.Contains("STAR context is stale", result.StatusMessage);
+        Assert.Equal("BANKR5", result.ActiveStars["AAL123"]);
+        Assert.Contains("BANKR five", result.Prompt);
+        Assert.Contains("1 descend-via aircraft", result.StatusMessage);
     }
 
     [Fact]

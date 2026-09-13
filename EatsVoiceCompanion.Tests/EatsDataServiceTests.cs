@@ -71,6 +71,38 @@ public sealed class EatsDataServiceTests : IDisposable
         Assert.Contains("MORE", result.ActiveRouteFixes["JIA5588"]);
     }
 
+    [Fact]
+    public void RouteContextService_ExpandsNonDescendViaArrivalForFixContext()
+    {
+        Directory.CreateDirectory(_directory);
+        string logPath = Path.Combine(_directory, "LogDetail.txt");
+        string airwaysPath = Path.Combine(_directory, "Airways.txt");
+        File.WriteAllLines(
+            logPath,
+            [
+                "Generated IFR 381 DAL1486 EWR KATL " +
+                "EWR./.ODF055041..MHONY.OZZZI1.KATL"
+            ]);
+        File.WriteAllLines(
+            airwaysPath,
+            [
+                "; expect alt, no DV",
+                "OZZZI1 FLASK YEOLD SCHUL MHONY *240- WINNG " +
+                "OZZZI *120 *S250 HAARY KATL27L KATL"
+            ]);
+
+        EatsRouteContextData result = new EatsRouteContextService(
+            logPath,
+            airwaysPath).Load(["DAL1486"]);
+
+        Assert.Empty(result.ActiveStars);
+        Assert.Contains("MHONY", result.ActiveRouteFixes["DAL1486"]);
+        Assert.Contains("WINNG", result.ActiveRouteFixes["DAL1486"]);
+        Assert.Contains("OZZZI", result.ActiveRouteFixes["DAL1486"]);
+        Assert.Contains("HAARY", result.ActiveRouteFixes["DAL1486"]);
+        Assert.DoesNotContain("OZZZI1", result.ActiveRouteFixes["DAL1486"]);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

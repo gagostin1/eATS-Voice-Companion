@@ -197,21 +197,6 @@ public sealed class RecognitionContextService
         {
             EatsRouteContextData routes =
                 _routeContextService!.Load(activeCallsigns);
-            TimeSpan routeAge = _utcNow() - routes.LastWriteTimeUtc;
-
-            if (routeAge < TimeSpan.Zero)
-            {
-                routeAge = TimeSpan.Zero;
-            }
-
-            if (routeAge > _maximumSnapshotAge)
-            {
-                return (
-                    EmptyActiveStars(),
-                    EmptyActiveRouteFixes(),
-                    $" Named STAR context is stale " +
-                    $"({routeAge.TotalMinutes:F1} minutes old).");
-            }
 
             return (
                 routes.ActiveStars,

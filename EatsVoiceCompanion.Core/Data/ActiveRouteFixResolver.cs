@@ -10,11 +10,28 @@ public static partial class ActiveRouteFixResolver
         IReadOnlyDictionary<string, GeneratedAircraftRoute> routes,
         IEnumerable<DescendViaProcedure> procedures)
     {
+        ArgumentNullException.ThrowIfNull(procedures);
+
+        return Resolve(
+            activeCallsigns,
+            routes,
+            procedures.Select(procedure => new RouteProcedure(
+                procedure.Name,
+                procedure.Destination,
+                procedure.Fixes ?? new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase))));
+    }
+
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> Resolve(
+        IEnumerable<string> activeCallsigns,
+        IReadOnlyDictionary<string, GeneratedAircraftRoute> routes,
+        IEnumerable<RouteProcedure> procedures)
+    {
         ArgumentNullException.ThrowIfNull(activeCallsigns);
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(procedures);
 
-        DescendViaProcedure[] procedureArray = procedures.ToArray();
+        RouteProcedure[] procedureArray = procedures.ToArray();
         HashSet<string> procedureNames = procedureArray
             .Select(item => item.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -44,15 +61,12 @@ public static partial class ActiveRouteFixResolver
                 }
             }
 
-            foreach (DescendViaProcedure procedure in procedureArray.Where(
+            foreach (RouteProcedure procedure in procedureArray.Where(
                          item => routeElements.Contains(
                              item.Name,
                              StringComparer.OrdinalIgnoreCase)))
             {
-                if (procedure.Fixes is not null)
-                {
-                    fixes.UnionWith(procedure.Fixes);
-                }
+                fixes.UnionWith(procedure.Fixes);
             }
 
             if (fixes.Count > 0)

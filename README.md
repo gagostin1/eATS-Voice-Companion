@@ -21,6 +21,7 @@ Created and maintained by **Gus Agostinho**.
 - Uses assigned STARs, flight plans, airways, and route fixes to improve command interpretation
 - Ranks best-effort command hypotheses when the transcript is imperfect
 - Supports multi-instruction transmissions and editable transcript retries
+- Keeps a private local correction history with review, replay, and sanitized regression-case export
 - Validates generated tokens and checks callsigns against the current eATS snapshot
 - Automatically stages the best command in eATS while leaving transmission to the controller
 
@@ -72,7 +73,7 @@ dotnet run --project EatsVoiceCompanion.App
 
 ## Privacy
 
-Speech recognition is local. Audio, transcripts, settings, and logs remain on the computer unless you choose to share them. Saved data is cleaned up according to the app's retention rules.
+Speech recognition is local. Audio, transcripts, correction history, settings, and logs remain on the computer unless you explicitly export and share a reviewed regression case. Saved audio is cleaned up according to the app's retention rules.
 
 ## Project status
 

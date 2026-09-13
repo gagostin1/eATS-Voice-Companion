@@ -363,6 +363,35 @@ public static partial class VoiceTranscriptRecovery
         string[] tokens = normalized.Split(
             ' ',
             StringSplitOptions.RemoveEmptyEntries);
+        string[] observedFlightNumbers = Regex.Matches(
+                normalized,
+                @"\b\d{1,4}\b",
+                RegexOptions.CultureInvariant)
+            .Select(match => match.Value.TrimStart('0'))
+            .Select(value => value.Length == 0 ? "0" : value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        string[] exactNumberMatches = active
+            .Where(callsign => !callsign.StartsWith('N'))
+            .Where(callsign =>
+            {
+                string digits = new(
+                    callsign.Where(char.IsDigit).ToArray());
+                string normalizedDigits = digits.TrimStart('0');
+                normalizedDigits = normalizedDigits.Length == 0
+                    ? "0"
+                    : normalizedDigits;
+                return observedFlightNumbers.Contains(
+                    normalizedDigits,
+                    StringComparer.Ordinal);
+            })
+            .ToArray();
+
+        if (exactNumberMatches.Length == 1)
+        {
+            return exactNumberMatches[0];
+        }
+
         CallsignMatch? direct = FindCallsign(
             tokens,
             active,
@@ -916,6 +945,24 @@ public static partial class VoiceTranscriptRecovery
             normalized,
             @"\b(?<first>\d)99er\b",
             "${first} niner niner");
+
+        normalized = Regex.Replace(
+            normalized,
+            @"\b(?<first>\d)9er\b",
+            "${first} niner");
+
+        const string aviationDigit =
+            @"(?:\d+|zero|oh|one|two|three|tree|four|fower|" +
+            @"five|fife|six|seven|eight|nine|niner)";
+
+        for (int pass = 0; pass < 2; pass++)
+        {
+            normalized = Regex.Replace(
+                normalized,
+                $@"\b(?<digit>{aviationDigit})\s+or\s+" +
+                $@"(?={aviationDigit}\b)",
+                "${digit} ");
+        }
 
         normalized = Regex.Replace(
             normalized,

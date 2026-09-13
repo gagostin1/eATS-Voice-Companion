@@ -9,10 +9,16 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 ### Added
 
 - Visible creator and copyright attribution for Gus Agostinho in the application header, Settings page, assembly metadata, and project README
+- A first-run recognition-improvement notice with an enabled-by-default participation preference, an immediate opt-out, and a persistent Settings control; no data is uploaded automatically in this release
+- Local correction history for completed voice attempts, including correct/corrected review states, expected commands, saved recognition context, sanitized regression-case export, and non-staging WAV replay against the current recognizer
 
 ### Fixed
 
+- Route and arrival context remains available for current aircraft when eATS has not recently appended to `LogDetail.txt`
+- Whisper-inserted "or" tokens between digit-by-digit altimeter values no longer prevent number recovery
 - A simplified high-contrast microphone-and-radar application icon remains recognizable in the Windows title bar and taskbar while the detailed logo remains the primary project artwork
+- Non-descend-via arrival and procedure definitions are expanded from `Airways.txt`, allowing route-aware speech recovery to match fixes such as spoken “Aussie” to `OZZZI` instead of treating the procedure name `OZZZI1` as a fix
+- A uniquely matching active airline flight number now wins callsign recovery when Whisper badly mangles the airline name, such as “Those are 1486” for `DAL1486`
 
 ## [0.2.0] - 2026-09-12
 

@@ -331,6 +331,157 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="History">
+                <Grid Margin="2,18,2,2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                           Text="Correction history"/>
+                                <TextBlock Margin="0,5,18,0"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           Text="Review real voice attempts, preserve the intended result, and replay retained audio through the current recognizer without staging it in eATS."
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Click="RefreshHistory_Click"
+                                    Content="Refresh history"
+                                    Style="{StaticResource BaseButtonStyle}"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1" Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="0.85*" MinWidth="220"/>
+                            <ColumnDefinition Width="1.35*" MinWidth="340"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Margin="0,0,8,0"
+                                Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock FontWeight="SemiBold"
+                                           Foreground="{StaticResource InkBrush}"
+                                           Text="Saved attempts"/>
+                                <ListBox x:Name="CorrectionHistoryListBox"
+                                         Grid.Row="1"
+                                         Margin="0,12,0,0"
+                                         BorderBrush="{StaticResource LineBrush}"
+                                         DisplayMemberPath="DisplayTitle"
+                                         SelectionChanged="CorrectionHistoryList_SelectionChanged"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                                <TextBlock x:Name="HistoryCountText"
+                                           Grid.Row="2"
+                                           Margin="0,10,0,0"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           Text="No saved attempts yet."
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1" Margin="8,0,0,0"
+                                Style="{StaticResource CardStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                               Text="Review selected attempt"/>
+                                    <TextBlock x:Name="HistoryDetailStatusText"
+                                               Margin="0,6,0,16"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Select an attempt from the history."
+                                               TextWrapping="Wrap"/>
+
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                               Text="Original transcript"/>
+                                    <TextBox x:Name="HistoryOriginalTranscriptTextBox"
+                                             MinHeight="76"
+                                             IsReadOnly="True"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalContentAlignment="Top"/>
+
+                                    <TextBlock Margin="0,14,0,6"
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               Text="Original generated command"/>
+                                    <TextBox x:Name="HistoryOriginalCommandTextBox"
+                                             IsReadOnly="True"
+                                             FontFamily="Consolas"/>
+
+                                    <TextBlock Margin="0,14,0,6"
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               Text="Corrected transcript"/>
+                                    <TextBox x:Name="HistoryCorrectedTranscriptTextBox"
+                                             MinHeight="76"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalContentAlignment="Top"/>
+
+                                    <TextBlock Margin="0,14,0,6"
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               Text="Expected eATS command"/>
+                                    <TextBox x:Name="HistoryExpectedCommandTextBox"
+                                             FontFamily="Consolas"/>
+
+                                    <WrapPanel Margin="0,16,0,0">
+                                        <Button x:Name="MarkHistoryCorrectButton"
+                                                Margin="0,0,10,10"
+                                                Click="MarkHistoryCorrect_Click"
+                                                Content="Mark correct"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+                                        <Button x:Name="SaveHistoryCorrectionButton"
+                                                Margin="0,0,10,10"
+                                                Click="SaveHistoryCorrection_Click"
+                                                Content="Save correction"
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                        <Button x:Name="ReplayHistoryButton"
+                                                Margin="0,0,10,10"
+                                                Click="ReplayHistory_Click"
+                                                Content="Replay through recognizer"
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                        <Button x:Name="ExportHistoryButton"
+                                                Margin="0,0,0,10"
+                                                Click="ExportHistory_Click"
+                                                Content="Export regression case"
+                                                ToolTip="Enable recognition-improvement participation in Settings to export a contribution-ready case."
+                                                Style="{StaticResource BaseButtonStyle}"/>
+                                    </WrapPanel>
+
+                                    <Border Margin="0,6,0,0"
+                                            Padding="14"
+                                            Background="#FFF8FAFC"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}"
+                                                       Text="Latest replay"/>
+                                            <TextBlock x:Name="HistoryReplayResultText"
+                                                       Margin="0,7,0,0"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       Text="This attempt has not been replayed."
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
             <TabItem Header="Generate Command">
                 <ScrollViewer Padding="2,18,2,2" VerticalScrollBarVisibility="Auto">
                     <Grid>
@@ -636,6 +787,25 @@
                             <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                               Text="Development feedback"/>
+                                    <TextBlock Margin="0,5,0,16"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Help turn real recognition failures into regression tests that improve future releases."
+                                               TextWrapping="Wrap"/>
+                                    <CheckBox x:Name="RecognitionImprovementCheckBox"
+                                              VerticalContentAlignment="Center"
+                                              FontWeight="SemiBold"
+                                              Content="Participate in recognition improvement"/>
+                                    <TextBlock Margin="22,8,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Enabled by default. Nothing is uploaded automatically; exported correction reports are reviewable before sharing. Microphone audio requires separate approval."
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleStyle}"
                                                Text="About eATS Voice Companion"/>
                                     <TextBlock Margin="0,10,0,0"
                                                Foreground="{StaticResource InkBrush}"
@@ -643,7 +813,7 @@
                                                Text="Created and maintained by Gus Agostinho."/>
                                     <TextBlock Margin="0,6,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="© 2026 Gus Agostinho. Released under the MIT License."
+                                               Text="&#x00A9; 2026 Gus Agostinho. Released under the MIT License."
                                                TextWrapping="Wrap"/>
                                     <TextBlock Margin="0,6,0,0"
                                                Foreground="{StaticResource MutedBrush}"

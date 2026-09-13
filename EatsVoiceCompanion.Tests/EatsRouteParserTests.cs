@@ -111,4 +111,57 @@ public sealed class EatsRouteParserTests
         Assert.DoesNotContain("OZZZI1", result["DAL688"]);
         Assert.DoesNotContain("KATL", result["DAL688"]);
     }
+
+    [Fact]
+    public void RouteProcedureParser_IncludesNonDescendViaArrivalFixes()
+    {
+        IReadOnlyList<RouteProcedure> procedures =
+            RouteProcedureParser.Parse(
+            [
+                "; expect alt, no DV",
+                "OZZZI1 FLASK YEOLD KNOWW/-15 *240- WINNG " +
+                "OZZZI *120 *S250 HAARY KATL27L KATL"
+            ]);
+
+        RouteProcedure procedure = Assert.Single(procedures);
+
+        Assert.Equal("OZZZI1", procedure.Name);
+        Assert.Equal("KATL", procedure.Destination);
+        Assert.Contains("KNOWW", procedure.Fixes);
+        Assert.Contains("WINNG", procedure.Fixes);
+        Assert.Contains("OZZZI", procedure.Fixes);
+        Assert.Contains("HAARY", procedure.Fixes);
+        Assert.DoesNotContain("OZZZI1", procedure.Fixes);
+        Assert.DoesNotContain("KATL", procedure.Fixes);
+    }
+
+    [Fact]
+    public void RouteFixResolver_ExpandsNonDescendViaArrivalFixes()
+    {
+        IReadOnlyDictionary<string, GeneratedAircraftRoute> routes =
+            GeneratedRouteLogParser.Parse(
+            [
+                "Generated IFR 381 DAL1486 EWR KATL " +
+                "EWR./.ODF055041..MHONY.OZZZI1.KATL"
+            ]);
+        RouteProcedure[] procedures =
+        [
+            new(
+                "OZZZI1",
+                "KATL",
+                new HashSet<string>(["WINNG", "OZZZI", "HAARY"]))
+        ];
+
+        IReadOnlyDictionary<string, IReadOnlySet<string>> result =
+            ActiveRouteFixResolver.Resolve(
+                ["DAL1486"],
+                routes,
+                procedures);
+
+        Assert.Contains("MHONY", result["DAL1486"]);
+        Assert.Contains("WINNG", result["DAL1486"]);
+        Assert.Contains("OZZZI", result["DAL1486"]);
+        Assert.Contains("HAARY", result["DAL1486"]);
+        Assert.DoesNotContain("OZZZI1", result["DAL1486"]);
+    }
 }

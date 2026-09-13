@@ -393,6 +393,52 @@ public sealed class VoiceCommandInterpreterTests
     }
 
     [Fact]
+    public void Interpret_UsesUniqueExactFlightNumberWhenAirlineIsMangled()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Those are 1486, Atlanta Center, cross Aussie at and " +
+                "maintain 1-3,000, the Atlanta altimeter 29er 66",
+                "Atlanta Center",
+                new HashSet<string>(["DAL1486", "SWA1510", "AAL1487"]),
+                new Dictionary<string, string>(),
+                new Dictionary<string, IReadOnlySet<string>>
+                {
+                    ["DAL1486"] = new HashSet<string>(
+                        ["WINNG", "OZZZI", "HAARY"],
+                        StringComparer.OrdinalIgnoreCase)
+                });
+
+        Assert.Equal(
+            "DAL1486 XOZZZI@130 A2966",
+            result.Command.ToEatsCommand());
+        Assert.True(result.RouteFixWasCorrected);
+    }
+
+    [Fact]
+    public void Interpret_RecoversWhisperDisjunctionsBetweenAltimeterDigits()
+    {
+        VoiceCommandInterpretation result =
+            new VoiceCommandInterpreter(Aliases).Interpret(
+                "Delta 1288, Atlanta Center, cross Aussie at and maintain " +
+                "1-3,000, the Atlanta altimeter 2-9 or 9 or 2",
+                "Atlanta Center",
+                new HashSet<string>(["DAL1288"]),
+                new Dictionary<string, string>(),
+                new Dictionary<string, IReadOnlySet<string>>
+                {
+                    ["DAL1288"] = new HashSet<string>(
+                        ["WINNG", "OZZZI", "HAARY"],
+                        StringComparer.OrdinalIgnoreCase)
+                });
+
+        Assert.Equal(
+            "DAL1288 XOZZZI@130 A2992",
+            result.Command.ToEatsCommand());
+        Assert.True(result.RouteFixWasCorrected);
+    }
+
+    [Fact]
     public void Interpret_RecoversClearedDirectAndAircraftRouteFix()
     {
         VoiceCommandInterpretation result =

@@ -17,7 +17,9 @@ public interface IEatsRouteContextService
 public sealed class EatsRouteContextService : IEatsRouteContextService
 {
     private IReadOnlyList<DescendViaProcedure>? _cachedProcedures;
-    private DateTime _cachedAirwaysLastWriteTimeUtc;
+    private DateTime _cachedProceduresLastWriteTimeUtc;
+    private IReadOnlyList<RouteProcedure>? _cachedRouteProcedures;
+    private DateTime _cachedRouteProceduresLastWriteTimeUtc;
 
     public EatsRouteContextService(
         string logDetailFilePath,
@@ -56,6 +58,8 @@ public sealed class EatsRouteContextService : IEatsRouteContextService
             GeneratedRouteLogParser.Parse(ReadSharedLines(LogDetailFilePath));
         IReadOnlyList<DescendViaProcedure> procedures =
             LoadProcedures();
+        IReadOnlyList<RouteProcedure> routeProcedures =
+            LoadRouteProcedures();
         IReadOnlyDictionary<string, string> activeStars =
             ActiveStarResolver.Resolve(
                 activeCallsigns,
@@ -65,7 +69,7 @@ public sealed class EatsRouteContextService : IEatsRouteContextService
             ActiveRouteFixResolver.Resolve(
                 activeCallsigns,
                 routes,
-                procedures);
+                routeProcedures);
 
         return new EatsRouteContextData(
             new ReadOnlyDictionary<string, string>(
@@ -82,14 +86,30 @@ public sealed class EatsRouteContextService : IEatsRouteContextService
             File.GetLastWriteTimeUtc(AirwaysFilePath);
 
         if (_cachedProcedures is null ||
-            lastWriteTimeUtc != _cachedAirwaysLastWriteTimeUtc)
+            lastWriteTimeUtc != _cachedProceduresLastWriteTimeUtc)
         {
             _cachedProcedures = DescendViaProcedureParser.Parse(
                 ReadSharedLines(AirwaysFilePath));
-            _cachedAirwaysLastWriteTimeUtc = lastWriteTimeUtc;
+            _cachedProceduresLastWriteTimeUtc = lastWriteTimeUtc;
         }
 
         return _cachedProcedures;
+    }
+
+    private IReadOnlyList<RouteProcedure> LoadRouteProcedures()
+    {
+        DateTime lastWriteTimeUtc =
+            File.GetLastWriteTimeUtc(AirwaysFilePath);
+
+        if (_cachedRouteProcedures is null ||
+            lastWriteTimeUtc != _cachedRouteProceduresLastWriteTimeUtc)
+        {
+            _cachedRouteProcedures = RouteProcedureParser.Parse(
+                ReadSharedLines(AirwaysFilePath));
+            _cachedRouteProceduresLastWriteTimeUtc = lastWriteTimeUtc;
+        }
+
+        return _cachedRouteProcedures;
     }
 
     private static IReadOnlyList<string> ReadSharedLines(string path)

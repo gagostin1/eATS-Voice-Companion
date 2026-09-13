@@ -23,6 +23,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             MaximumSavedRecordings = 50,
             PreferredMicrophoneName = "Test microphone",
             AutomaticallyStageVerifiedCommands = false,
+            ParticipateInRecognitionImprovement = false,
+            ContributionNoticeShown = true,
             PushToTalkHotkey = "Ctrl+Shift+F9"
         };
 
@@ -38,6 +40,12 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(
             expected.AutomaticallyStageVerifiedCommands,
             actual.AutomaticallyStageVerifiedCommands);
+        Assert.Equal(
+            expected.ParticipateInRecognitionImprovement,
+            actual.ParticipateInRecognitionImprovement);
+        Assert.Equal(
+            expected.ContributionNoticeShown,
+            actual.ContributionNoticeShown);
         Assert.Equal(expected.PushToTalkHotkey, actual.PushToTalkHotkey);
     }
 
@@ -53,6 +61,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(7, result.RecordingRetentionDays);
         Assert.Equal(100, result.MaximumSavedRecordings);
         Assert.True(result.AutomaticallyStageVerifiedCommands);
+        Assert.True(result.ParticipateInRecognitionImprovement);
+        Assert.False(result.ContributionNoticeShown);
         Assert.Null(result.PushToTalkHotkey);
     }
 
@@ -77,6 +87,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             new CompanionSettingsService(path).Load();
 
         Assert.True(result.AutomaticallyStageVerifiedCommands);
+        Assert.True(result.ParticipateInRecognitionImprovement);
+        Assert.False(result.ContributionNoticeShown);
     }
 
     public void Dispose()

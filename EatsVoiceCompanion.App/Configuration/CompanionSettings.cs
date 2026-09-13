@@ -19,6 +19,10 @@ public sealed class CompanionSettings
 
     public bool AutomaticallyStageVerifiedCommands { get; set; } = true;
 
+    public bool ParticipateInRecognitionImprovement { get; set; } = true;
+
+    public bool ContributionNoticeShown { get; set; }
+
     public string? PushToTalkHotkey { get; set; }
 
     public static string GetDefaultEatsDataDirectory()
