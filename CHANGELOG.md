@@ -6,6 +6,10 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+### Added
+
+- Visible creator and copyright attribution for Gus Agostinho in the application header, Settings page, assembly metadata, and project README
+
 ### Fixed
 
 - A simplified high-contrast microphone-and-radar application icon remains recognizable in the Windows title bar and taskbar while the detailed logo remains the primary project artwork

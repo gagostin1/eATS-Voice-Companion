@@ -4,6 +4,14 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AssemblyTitle>eATS Voice Companion Core</AssemblyTitle>
+    <Product>eATS Voice Companion</Product>
+    <Authors>Gus Agostinho</Authors>
+    <Company>Gus Agostinho</Company>
+    <Copyright>Copyright © 2026 Gus Agostinho</Copyright>
+    <Description>Core command interpretation and safety library for eATS Voice Companion.</Description>
+    <RepositoryUrl>https://github.com/gagostin1/eATS-Voice-Companion</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
 </Project>

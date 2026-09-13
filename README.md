@@ -4,6 +4,8 @@
 
 eATS Voice Companion is an independent Windows app that turns spoken ATC instructions into commands for the eATS enroute simulator. Recognition runs locally, commands are checked against available simulator context, and valid results are staged for review.
 
+Created and maintained by **Gus Agostinho**.
+
 [Download v0.2.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.2.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md)
 
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
@@ -77,6 +79,8 @@ Speech recognition is local. Audio, transcripts, settings, and logs remain on th
 This is an early public beta focused on local use with eATS. Contributions and focused bug reports are welcome.
 
 ## Independence and license
+
+Created and maintained by Gus Agostinho. Copyright © 2026 Gus Agostinho.
 
 This project is not affiliated with, endorsed by, or supported by eATS, FAA, or any other simulator vendor or aviation organization.
 
