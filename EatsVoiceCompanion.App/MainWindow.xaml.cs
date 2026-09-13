@@ -117,9 +117,10 @@ public partial class MainWindow : Window
 
         MaxWidth = workArea.Width;
         MaxHeight = workArea.Height;
-        MinHeight = Math.Min(830, workArea.Height * 0.90);
-        Width = Math.Min(920, workArea.Width * 0.92);
-        Height = Math.Min(830, workArea.Height * 0.96);
+        MinWidth = Math.Min(900, workArea.Width * 0.85);
+        MinHeight = Math.Min(940, workArea.Height * 0.90);
+        Width = Math.Min(1040, workArea.Width * 0.94);
+        Height = Math.Min(1020, workArea.Height * 0.98);
     }
 
     private CompanionSettings LoadSettingsOrDefaults()
@@ -155,6 +156,8 @@ public partial class MainWindow : Window
             _settings.MaximumSavedRecordings.ToString();
         AutoStageCommandsCheckBox.IsChecked =
             _settings.AutomaticallyStageVerifiedCommands;
+        AlwaysOnTopCheckBox.IsChecked = _settings.AlwaysOnTop;
+        Topmost = _settings.AlwaysOnTop;
         RecognitionImprovementCheckBox.IsChecked =
             _settings.ParticipateInRecognitionImprovement;
         PushToTalkHotkeyDefinition.TryParse(
@@ -204,6 +207,7 @@ public partial class MainWindow : Window
                     (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name,
                 AutomaticallyStageVerifiedCommands =
                     AutoStageCommandsCheckBox.IsChecked == true,
+                AlwaysOnTop = AlwaysOnTopCheckBox.IsChecked == true,
                 ParticipateInRecognitionImprovement =
                     RecognitionImprovementCheckBox.IsChecked == true,
                 ContributionNoticeShown =
@@ -215,6 +219,7 @@ public partial class MainWindow : Window
 
             _settingsService.Save(updated);
             _settings = updated;
+            Topmost = updated.AlwaysOnTop;
             ShowCorrectionHistoryEntry(
                 CorrectionHistoryListBox.SelectedItem as
                     CorrectionHistoryEntry);
@@ -827,6 +832,7 @@ public partial class MainWindow : Window
 
             _recordingStartedByHotkey = !captureMouse;
             _currentVoiceHistoryEntryId = null;
+            ResetVoiceFeedback();
 
             SaveSettingsButton.IsEnabled = false;
             InterpretTranscriptButton.IsEnabled = false;
@@ -1315,6 +1321,10 @@ public partial class MainWindow : Window
             };
         DeleteHistoryEntryButton.IsEnabled =
             !isBusy && CorrectionHistoryListBox.SelectedItem is not null;
+        VoiceLooksRightButton.IsEnabled =
+            !isBusy && GetCurrentVoiceHistoryEntry()?.GeneratedCommand is not null;
+        VoiceFixThisButton.IsEnabled = !isBusy;
+        SaveVoiceFeedbackButton.IsEnabled = !isBusy;
         CancelTranscriptionButton.IsEnabled = isBusy;
         CancelTranscriptionButton.Content = "Cancel transcription";
     }
@@ -1370,6 +1380,7 @@ public partial class MainWindow : Window
             _correctionHistoryService.Save(entry);
             _currentVoiceHistoryEntryId = entry.Id;
             RefreshCorrectionHistory(entry.Id);
+            ShowVoiceFeedbackForCurrentAttempt();
         }
         catch (Exception exception)
         {
@@ -1412,6 +1423,7 @@ public partial class MainWindow : Window
         {
             _correctionHistoryService.Save(entry);
             RefreshCorrectionHistory(entry.Id);
+            ShowVoiceFeedbackForCurrentAttempt();
         }
         catch (Exception exception)
         {
@@ -1431,6 +1443,166 @@ public partial class MainWindow : Window
         catch (ArgumentException)
         {
             return null;
+        }
+    }
+
+    private CorrectionHistoryEntry? GetCurrentVoiceHistoryEntry()
+    {
+        if (_currentVoiceHistoryEntryId is not { } entryId)
+        {
+            return null;
+        }
+
+        return _correctionHistory.FirstOrDefault(entry => entry.Id == entryId);
+    }
+
+    private void ResetVoiceFeedback()
+    {
+        VoiceFeedbackPanel.Visibility = Visibility.Collapsed;
+        VoiceFeedbackButtonRow.Visibility = Visibility.Visible;
+        VoiceInlineCorrectionPanel.Visibility = Visibility.Collapsed;
+        VoiceFeedbackStatusText.Text = string.Empty;
+        VoiceCorrectedTranscriptTextBox.Text = string.Empty;
+        VoiceExpectedCommandTextBox.Text = string.Empty;
+    }
+
+    private void ShowVoiceFeedbackForCurrentAttempt()
+    {
+        CorrectionHistoryEntry? entry = GetCurrentVoiceHistoryEntry();
+
+        if (entry is null || string.IsNullOrWhiteSpace(entry.OriginalTranscript))
+        {
+            ResetVoiceFeedback();
+            return;
+        }
+
+        VoiceFeedbackPanel.Visibility = Visibility.Visible;
+        VoiceInlineCorrectionPanel.Visibility = Visibility.Collapsed;
+        VoiceLooksRightButton.IsEnabled = entry.GeneratedCommand is not null;
+
+        if (entry.ReviewStatus == CorrectionReviewStatus.Unreviewed)
+        {
+            VoiceFeedbackPromptText.Text = entry.GeneratedCommand is null
+                ? "Help the app correct this attempt"
+                : "Did the app get this right?";
+            VoiceFeedbackButtonRow.Visibility = Visibility.Visible;
+            VoiceFeedbackStatusText.Foreground = Brushes.DimGray;
+            VoiceFeedbackStatusText.Text = entry.GeneratedCommand is null
+                ? "Enter the intended transcript and command to teach local recognition."
+                : "Feedback is stored locally and updates recognition memory.";
+            return;
+        }
+
+        VoiceFeedbackButtonRow.Visibility = Visibility.Collapsed;
+        VoiceFeedbackPromptText.Text = "Feedback saved";
+        VoiceFeedbackStatusText.Foreground = Brushes.ForestGreen;
+        VoiceFeedbackStatusText.Text =
+            entry.ReviewStatus == CorrectionReviewStatus.Correct
+                ? "Marked correct."
+                : "Correction added to local recognition memory.";
+    }
+
+    private void VoiceLooksRight_Click(object sender, RoutedEventArgs e)
+    {
+        CorrectionHistoryEntry? entry = GetCurrentVoiceHistoryEntry();
+
+        if (entry?.GeneratedCommand is null)
+        {
+            VoiceFeedbackStatusText.Foreground = Brushes.Firebrick;
+            VoiceFeedbackStatusText.Text =
+                "There is no generated command to mark correct. Choose Fix this instead.";
+            return;
+        }
+
+        entry.CorrectedTranscript = entry.OriginalTranscript;
+        entry.ExpectedCommand = entry.GeneratedCommand;
+        entry.ReviewStatus = CorrectionReviewStatus.Correct;
+        SaveCurrentVoiceReview(entry, "Marked correct.");
+    }
+
+    private void VoiceFixThis_Click(object sender, RoutedEventArgs e)
+    {
+        CorrectionHistoryEntry? entry = GetCurrentVoiceHistoryEntry();
+
+        if (entry is null)
+        {
+            return;
+        }
+
+        VoiceCorrectedTranscriptTextBox.Text =
+            entry.CorrectedTranscript ?? entry.OriginalTranscript;
+        VoiceExpectedCommandTextBox.Text =
+            entry.ExpectedCommand ?? entry.GeneratedCommand ?? string.Empty;
+        VoiceFeedbackButtonRow.Visibility = Visibility.Collapsed;
+        VoiceInlineCorrectionPanel.Visibility = Visibility.Visible;
+        VoiceFeedbackPromptText.Text = "Correct this attempt";
+        VoiceFeedbackStatusText.Foreground = Brushes.DimGray;
+        VoiceFeedbackStatusText.Text =
+            "Saving updates local recognition but does not restage the command.";
+        VoiceCorrectedTranscriptTextBox.Focus();
+        VoiceCorrectedTranscriptTextBox.CaretIndex =
+            VoiceCorrectedTranscriptTextBox.Text.Length;
+    }
+
+    private void CancelVoiceFeedback_Click(object sender, RoutedEventArgs e) =>
+        ShowVoiceFeedbackForCurrentAttempt();
+
+    private void SaveVoiceFeedback_Click(object sender, RoutedEventArgs e)
+    {
+        CorrectionHistoryEntry? entry = GetCurrentVoiceHistoryEntry();
+
+        if (entry is null)
+        {
+            return;
+        }
+
+        try
+        {
+            string transcript = VoiceCorrectedTranscriptTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(transcript))
+            {
+                throw new ArgumentException("Enter the corrected transcript.");
+            }
+
+            string command = EatsTransmissionValidator.Validate(
+                VoiceExpectedCommandTextBox.Text);
+            entry.CorrectedTranscript = transcript;
+            entry.ExpectedCommand = command;
+            entry.ReviewStatus = CorrectionReviewStatus.Corrected;
+            SaveCurrentVoiceReview(
+                entry,
+                "Correction added to local recognition memory.");
+        }
+        catch (Exception exception)
+            when (exception is ArgumentException or InvalidOperationException)
+        {
+            VoiceFeedbackStatusText.Foreground = Brushes.Firebrick;
+            VoiceFeedbackStatusText.Text = exception.Message;
+        }
+    }
+
+    private void SaveCurrentVoiceReview(
+        CorrectionHistoryEntry entry,
+        string confirmation)
+    {
+        try
+        {
+            _correctionHistoryService.Save(entry);
+            RefreshCorrectionHistory(entry.Id);
+            ShowVoiceFeedbackForCurrentAttempt();
+            VoiceFeedbackStatusText.Foreground = Brushes.ForestGreen;
+            VoiceFeedbackStatusText.Text = confirmation;
+        }
+        catch (Exception exception)
+        {
+            VoiceFeedbackStatusText.Foreground = Brushes.Firebrick;
+            VoiceFeedbackStatusText.Text =
+                $"Feedback could not be saved: {exception.Message}";
+            _logger.Error(
+                "InlineCorrectionReviewSaveFailed",
+                "Inline correction feedback could not be saved.",
+                exception);
         }
     }
 

@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="eATS Voice Companion"
-        Width="920"
-        Height="830"
-        MinWidth="700"
-        MinHeight="830"
+        Width="1040"
+        Height="1020"
+        MinWidth="900"
+        MinHeight="940"
         Background="#FFF4F7FB"
         Deactivated="MainWindow_Deactivated"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
@@ -324,6 +324,71 @@
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                TextWrapping="Wrap"/>
+                                    <Border x:Name="VoiceFeedbackPanel"
+                                            Margin="0,14,0,0"
+                                            Padding="12"
+                                            Background="#FFF8FAFC"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock x:Name="VoiceFeedbackPromptText"
+                                                       Foreground="{StaticResource InkBrush}"
+                                                       FontWeight="SemiBold"
+                                                       Text="Did the app get this right?"
+                                                       TextWrapping="Wrap"/>
+                                            <StackPanel x:Name="VoiceFeedbackButtonRow"
+                                                        Margin="0,10,0,0"
+                                                        Orientation="Horizontal">
+                                                <Button x:Name="VoiceLooksRightButton"
+                                                        Padding="14,7"
+                                                        Click="VoiceLooksRight_Click"
+                                                        Content="Looks right"
+                                                        Style="{StaticResource PrimaryButtonStyle}"/>
+                                                <Button x:Name="VoiceFixThisButton"
+                                                        Margin="8,0,0,0"
+                                                        Padding="14,7"
+                                                        Click="VoiceFixThis_Click"
+                                                        Content="Fix this"
+                                                        Style="{StaticResource BaseButtonStyle}"/>
+                                            </StackPanel>
+                                            <StackPanel x:Name="VoiceInlineCorrectionPanel"
+                                                        Margin="0,12,0,0"
+                                                        Visibility="Collapsed">
+                                                <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                           Text="What you said"/>
+                                                <TextBox x:Name="VoiceCorrectedTranscriptTextBox"
+                                                         AcceptsReturn="True"
+                                                         MaxHeight="90"
+                                                         TextWrapping="Wrap"
+                                                         VerticalContentAlignment="Top"
+                                                         VerticalScrollBarVisibility="Auto"/>
+                                                <TextBlock Margin="0,10,0,0"
+                                                           Style="{StaticResource FieldLabelStyle}"
+                                                           Text="Expected eATS command"/>
+                                                <TextBox x:Name="VoiceExpectedCommandTextBox"
+                                                         FontFamily="Consolas"/>
+                                                <StackPanel Margin="0,10,0,0"
+                                                            Orientation="Horizontal">
+                                                    <Button x:Name="SaveVoiceFeedbackButton"
+                                                            Padding="14,7"
+                                                            Click="SaveVoiceFeedback_Click"
+                                                            Content="Save correction"
+                                                            Style="{StaticResource PrimaryButtonStyle}"/>
+                                                    <Button Margin="8,0,0,0"
+                                                            Padding="14,7"
+                                                            Click="CancelVoiceFeedback_Click"
+                                                            Content="Cancel"
+                                                            Style="{StaticResource BaseButtonStyle}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <TextBlock x:Name="VoiceFeedbackStatusText"
+                                                       Margin="0,9,0,0"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -747,6 +812,15 @@
                                     <TextBlock Margin="22,8,0,0"
                                                Foreground="{StaticResource MutedBrush}"
                                                Text="The command is typed into the eATS radio field after verification. The final Enter key is always left to you."
+                                               TextWrapping="Wrap"/>
+                                    <CheckBox x:Name="AlwaysOnTopCheckBox"
+                                              Margin="0,20,0,0"
+                                              VerticalContentAlignment="Center"
+                                              FontWeight="SemiBold"
+                                              Content="Keep eATS Voice Companion always on top"/>
+                                    <TextBlock Margin="22,8,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Keeps this window visible above eATS and other applications."
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>

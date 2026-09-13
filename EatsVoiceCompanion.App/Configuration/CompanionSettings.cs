@@ -21,6 +21,8 @@ public sealed class CompanionSettings
 
     public bool AutomaticallyStageVerifiedCommands { get; set; } = true;
 
+    public bool AlwaysOnTop { get; set; }
+
     public bool ParticipateInRecognitionImprovement { get; set; } = true;
 
     public bool ContributionNoticeShown { get; set; }
