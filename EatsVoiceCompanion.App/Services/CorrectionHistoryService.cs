@@ -124,8 +124,34 @@ public sealed class CorrectionHistoryService
         string appVersion,
         IReadOnlyDictionary<string, string>? airlineAliases = null)
     {
-        ArgumentNullException.ThrowIfNull(entry);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+
+        CorrectionRegressionCase regressionCase = CreateRegressionCase(
+            entry,
+            appVersion,
+            airlineAliases);
+
+        string fullPath = Path.GetFullPath(destinationPath);
+        string? directory = Path.GetDirectoryName(fullPath);
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException(
+                "The export directory could not be determined.");
+        }
+
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(
+            fullPath,
+            JsonSerializer.Serialize(regressionCase, SerializerOptions));
+    }
+
+    public CorrectionRegressionCase CreateRegressionCase(
+        CorrectionHistoryEntry entry,
+        string appVersion,
+        IReadOnlyDictionary<string, string>? airlineAliases = null)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
         ArgumentException.ThrowIfNullOrWhiteSpace(appVersion);
 
         if (entry.ReviewStatus == CorrectionReviewStatus.Unreviewed ||
@@ -177,20 +203,7 @@ public sealed class CorrectionHistoryService
             RouteFixes: routeFixes);
 
         CorrectionRegressionCaseValidator.Validate(regressionCase);
-
-        string fullPath = Path.GetFullPath(destinationPath);
-        string? directory = Path.GetDirectoryName(fullPath);
-
-        if (directory is null)
-        {
-            throw new InvalidOperationException(
-                "The export directory could not be determined.");
-        }
-
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(
-            fullPath,
-            JsonSerializer.Serialize(regressionCase, SerializerOptions));
+        return regressionCase;
     }
 
     private string GetEntryPath(Guid id) =>

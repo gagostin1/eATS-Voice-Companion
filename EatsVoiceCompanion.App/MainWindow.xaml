@@ -935,8 +935,64 @@
                                               Content="Participate in recognition improvement"/>
                                     <TextBlock Margin="22,8,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="Enabled by default. Nothing is uploaded automatically; exported correction reports are reviewable before sharing. Microphone audio requires separate approval."
+                                               Text="Enabled by default. Saved corrections are sanitized into the local outbox for review, but nothing is uploaded automatically. Microphone audio is never queued."
                                                TextWrapping="Wrap"/>
+                                    <Border Margin="0,18,0,0"
+                                            Padding="16"
+                                            Background="#FFF8FAFC"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="9">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}"
+                                                       Text="Sanitized contribution outbox"/>
+                                            <TextBlock x:Name="ContributionOutboxStatusText"
+                                                       Margin="0,7,0,0"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="0.9*"/>
+                                                    <ColumnDefinition Width="1.1*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ListBox x:Name="ContributionOutboxListBox"
+                                                         Height="170"
+                                                         DisplayMemberPath="DisplayTitle"
+                                                         SelectionChanged="ContributionOutbox_SelectionChanged"/>
+                                                <TextBox x:Name="ContributionOutboxPreviewTextBox"
+                                                         Grid.Column="1"
+                                                         Height="170"
+                                                         Margin="10,0,0,0"
+                                                         AcceptsReturn="True"
+                                                         FontFamily="Consolas"
+                                                         FontSize="12"
+                                                         IsReadOnly="True"
+                                                         TextWrapping="NoWrap"
+                                                         HorizontalScrollBarVisibility="Auto"
+                                                         VerticalContentAlignment="Top"
+                                                         VerticalScrollBarVisibility="Auto"/>
+                                            </Grid>
+                                            <StackPanel Margin="0,12,0,0"
+                                                        Orientation="Horizontal">
+                                                <Button Click="RefreshContributionOutbox_Click"
+                                                        Content="Refresh outbox"
+                                                        Style="{StaticResource BaseButtonStyle}"/>
+                                                <Button x:Name="DeleteContributionButton"
+                                                        Margin="8,0,0,0"
+                                                        Click="DeleteContribution_Click"
+                                                        Content="Delete selected"
+                                                        IsEnabled="False"
+                                                        Style="{StaticResource BaseButtonStyle}"/>
+                                                <Button x:Name="ExportContributionOutboxButton"
+                                                        Margin="8,0,0,0"
+                                                        Click="ExportContributionOutbox_Click"
+                                                        Content="Export all"
+                                                        IsEnabled="False"
+                                                        Style="{StaticResource BaseButtonStyle}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Border>
 

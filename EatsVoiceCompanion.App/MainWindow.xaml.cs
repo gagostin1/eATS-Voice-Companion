@@ -42,6 +42,8 @@ public partial class MainWindow : Window
     private readonly SpeechRecognitionService _speechRecognitionService;
     private readonly EatsCommandStager _commandStager;
     private readonly CorrectionHistoryService _correctionHistoryService;
+    private readonly CorrectionContributionOutboxService
+        _contributionOutboxService;
     private readonly LocalCorrectionMemoryService _correctionMemoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
@@ -77,6 +79,8 @@ public partial class MainWindow : Window
     private Key? _modifierHotkeyCandidate;
     private bool _recordingStartedByHotkey;
     private IReadOnlyList<CorrectionHistoryEntry> _correctionHistory = [];
+    private IReadOnlyList<CorrectionContributionOutboxItem>
+        _contributionOutbox = [];
     private Guid? _currentVoiceHistoryEntryId;
     private readonly Forms.NotifyIcon _trayIcon;
     private Button? _mouseRecordingButton;
@@ -104,6 +108,9 @@ public partial class MainWindow : Window
             logger: _logger);
         _commandStager = new EatsCommandStager();
         _correctionHistoryService = new CorrectionHistoryService();
+        _contributionOutboxService =
+            new CorrectionContributionOutboxService(
+                _correctionHistoryService);
         _correctionMemoryService = new LocalCorrectionMemoryService();
 
         InitializeComponent();
@@ -122,6 +129,7 @@ public partial class MainWindow : Window
 
         LoadMicrophones();
         RefreshCorrectionHistory();
+        RefreshContributionOutbox();
         BuildRecognitionContext();
 
         _logger.Information(
@@ -239,6 +247,7 @@ public partial class MainWindow : Window
             _settingsService.Save(updated);
             _settings = updated;
             Topmost = updated.AlwaysOnTop;
+            RefreshContributionOutbox();
             ShowCorrectionHistoryEntry(
                 CorrectionHistoryListBox.SelectedItem as
                     CorrectionHistoryEntry);
@@ -1694,6 +1703,7 @@ public partial class MainWindow : Window
         try
         {
             _correctionHistoryService.Save(entry);
+            QueueContributionIfEligible(entry);
             RefreshCorrectionHistory(entry.Id);
             ShowVoiceFeedbackForCurrentAttempt();
         }
@@ -1861,6 +1871,7 @@ public partial class MainWindow : Window
         try
         {
             _correctionHistoryService.Save(entry);
+            QueueContributionIfEligible(entry);
             RefreshCorrectionHistory(entry.Id);
             ShowVoiceFeedbackForCurrentAttempt();
             VoiceFeedbackStatusText.Foreground = Brushes.ForestGreen;
@@ -1881,6 +1892,174 @@ public partial class MainWindow : Window
     private void RefreshHistory_Click(
         object sender,
         RoutedEventArgs e) => RefreshCorrectionHistory();
+
+    private void QueueContributionIfEligible(CorrectionHistoryEntry entry)
+    {
+        if (!_settings.ParticipateInRecognitionImprovement ||
+            entry.ReviewStatus != CorrectionReviewStatus.Corrected)
+        {
+            return;
+        }
+
+        try
+        {
+            bool added = _contributionOutboxService.Enqueue(
+                entry,
+                GetAppVersion(),
+                _airlineAliases);
+            RefreshContributionOutbox();
+
+            _logger.Information(
+                added
+                    ? "CorrectionContributionQueued"
+                    : "CorrectionContributionDeduplicated",
+                added
+                    ? "A sanitized correction was added to the local outbox."
+                    : "An identical sanitized correction was already queued.",
+                new { entry.Id });
+        }
+        catch (Exception exception)
+        {
+            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
+            ContributionOutboxStatusText.Text =
+                $"The correction was saved locally, but its sanitized " +
+                $"contribution could not be queued: {exception.Message}";
+            _logger.Error(
+                "CorrectionContributionQueueFailed",
+                "A corrected attempt could not be added to the outbox.",
+                exception);
+        }
+    }
+
+    private void RefreshContributionOutbox_Click(
+        object sender,
+        RoutedEventArgs e) => RefreshContributionOutbox();
+
+    private void RefreshContributionOutbox(string? selectedPath = null)
+    {
+        try
+        {
+            selectedPath ??=
+                (ContributionOutboxListBox.SelectedItem as
+                    CorrectionContributionOutboxItem)?.FilePath;
+            _contributionOutbox = _contributionOutboxService.Load();
+            ContributionOutboxListBox.ItemsSource = _contributionOutbox;
+            CorrectionContributionOutboxItem? selected =
+                _contributionOutbox.FirstOrDefault(item => string.Equals(
+                    item.FilePath,
+                    selectedPath,
+                    StringComparison.OrdinalIgnoreCase)) ??
+                _contributionOutbox.FirstOrDefault();
+            ContributionOutboxListBox.SelectedItem = selected;
+            ShowContributionOutboxItem(selected);
+            ExportContributionOutboxButton.IsEnabled =
+                _contributionOutbox.Count > 0;
+            ContributionOutboxStatusText.Foreground = Brushes.DimGray;
+            ContributionOutboxStatusText.Text =
+                !_settings.ParticipateInRecognitionImprovement
+                    ? $"Participation is off. {_contributionOutbox.Count} " +
+                      "previously queued item(s) remain local."
+                    : _contributionOutbox.Count == 0
+                        ? "No pending corrections. New saved corrections " +
+                          "will be queued here automatically."
+                        : $"{_contributionOutbox.Count} sanitized correction(s) " +
+                          "waiting locally. Nothing is uploaded automatically.";
+        }
+        catch (Exception exception)
+        {
+            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
+            ContributionOutboxStatusText.Text =
+                $"The contribution outbox could not be loaded: " +
+                exception.Message;
+        }
+    }
+
+    private void ContributionOutbox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        ShowContributionOutboxItem(
+            ContributionOutboxListBox.SelectedItem as
+                CorrectionContributionOutboxItem);
+    }
+
+    private void ShowContributionOutboxItem(
+        CorrectionContributionOutboxItem? item)
+    {
+        ContributionOutboxPreviewTextBox.Text = item?.Json ?? string.Empty;
+        DeleteContributionButton.IsEnabled = item is not null;
+    }
+
+    private void DeleteContribution_Click(object sender, RoutedEventArgs e)
+    {
+        if (ContributionOutboxListBox.SelectedItem is not
+            CorrectionContributionOutboxItem item)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation = MessageBox.Show(
+            this,
+            "Delete this pending sanitized contribution? The correction " +
+            "will remain in local history and recognition memory.",
+            "Delete contribution",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _contributionOutboxService.Delete(item);
+            RefreshContributionOutbox();
+        }
+        catch (Exception exception)
+        {
+            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
+            ContributionOutboxStatusText.Text =
+                $"The contribution could not be deleted: {exception.Message}";
+        }
+    }
+
+    private void ExportContributionOutbox_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        using Forms.FolderBrowserDialog dialog = new()
+        {
+            Description = "Choose a folder for sanitized regression cases",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            int exported = _contributionOutboxService.ExportAll(
+                dialog.SelectedPath);
+            ContributionOutboxStatusText.Foreground = Brushes.ForestGreen;
+            ContributionOutboxStatusText.Text =
+                $"Exported {exported} sanitized contribution(s) to " +
+                dialog.SelectedPath;
+        }
+        catch (Exception exception)
+        {
+            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
+            ContributionOutboxStatusText.Text =
+                $"The outbox could not be exported: {exception.Message}";
+        }
+    }
+
+    private static string GetAppVersion() =>
+        typeof(MainWindow).Assembly.GetName().Version?
+            .ToString(3) ?? "unknown";
 
     private void RefreshCorrectionHistory(Guid? selectedId = null)
     {
@@ -2100,6 +2279,7 @@ public partial class MainWindow : Window
         try
         {
             _correctionHistoryService.Save(entry);
+            QueueContributionIfEligible(entry);
             RefreshCorrectionHistory(entry.Id);
             HistoryDetailStatusText.Foreground = Brushes.ForestGreen;
             HistoryDetailStatusText.Text = confirmation;
