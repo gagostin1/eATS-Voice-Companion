@@ -23,6 +23,16 @@ public sealed class CorrectionHistoryEntry
 
     public bool WasBestEffort { get; set; }
 
+    public double? AudioDurationSeconds { get; set; }
+
+    public double? AudioRmsDbfs { get; set; }
+
+    public double? AudioPeakDbfs { get; set; }
+
+    public double? AudioClippedSamplePercent { get; set; }
+
+    public AudioQualitySeverity? AudioQualitySeverity { get; set; }
+
     public string ControllerPosition { get; set; } = string.Empty;
 
     public string RecognitionPrompt { get; set; } = string.Empty;

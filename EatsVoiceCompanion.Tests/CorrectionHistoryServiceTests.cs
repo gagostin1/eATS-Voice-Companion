@@ -31,6 +31,13 @@ public sealed class CorrectionHistoryServiceTests : IDisposable
         Assert.Equal(expected.Id, actual.Id);
         Assert.Equal(expected.OriginalTranscript, actual.OriginalTranscript);
         Assert.Equal(expected.GeneratedCommand, actual.GeneratedCommand);
+        Assert.Equal(expected.AudioDurationSeconds, actual.AudioDurationSeconds);
+        Assert.Equal(expected.AudioRmsDbfs, actual.AudioRmsDbfs);
+        Assert.Equal(expected.AudioPeakDbfs, actual.AudioPeakDbfs);
+        Assert.Equal(
+            expected.AudioClippedSamplePercent,
+            actual.AudioClippedSamplePercent);
+        Assert.Equal(expected.AudioQualitySeverity, actual.AudioQualitySeverity);
         Assert.Equal(expected.ReviewStatus, actual.ReviewStatus);
         Assert.Equal(expected.CorrectedTranscript, actual.CorrectedTranscript);
         Assert.Equal(expected.ExpectedCommand, actual.ExpectedCommand);
@@ -164,6 +171,11 @@ public sealed class CorrectionHistoryServiceTests : IDisposable
         RecordingFilePath = @"C:\recording.wav",
         OriginalTranscript = "Delta 123, fly heading 270.",
         GeneratedCommand = "DAL123 FH270",
+        AudioDurationSeconds = 2.4,
+        AudioRmsDbfs = -18.5,
+        AudioPeakDbfs = -3.2,
+        AudioClippedSamplePercent = 0.01,
+        AudioQualitySeverity = AudioQualitySeverity.Good,
         ControllerPosition = "Atlanta Center",
         RecognitionPrompt = "Active aircraft callsigns: Delta 123.",
         ActiveCallsigns = ["DAL123"],

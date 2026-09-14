@@ -18,6 +18,16 @@ public sealed class AudioRecordingCompletedEventArgs : EventArgs
     public Exception? Error { get; }
 }
 
+public sealed class AudioLevelChangedEventArgs : EventArgs
+{
+    public AudioLevelChangedEventArgs(double peakLevel)
+    {
+        PeakLevel = Math.Clamp(peakLevel, 0, 1);
+    }
+
+    public double PeakLevel { get; }
+}
+
 public sealed class AudioRecorder : IDisposable
 {
     private readonly RecordingStorageService _storage;
@@ -33,6 +43,9 @@ public sealed class AudioRecorder : IDisposable
 
     public event EventHandler<AudioRecordingCompletedEventArgs>?
         RecordingCompleted;
+
+    public event EventHandler<AudioLevelChangedEventArgs>?
+        AudioLevelChanged;
 
     public bool IsRecording { get; private set; }
 
@@ -98,6 +111,18 @@ public sealed class AudioRecorder : IDisposable
             eventArgs.Buffer,
             0,
             eventArgs.BytesRecorded);
+
+        int peak = 0;
+
+        for (int index = 0; index + 1 < eventArgs.BytesRecorded; index += 2)
+        {
+            short sample = BitConverter.ToInt16(eventArgs.Buffer, index);
+            peak = Math.Max(peak, Math.Abs((int)sample));
+        }
+
+        AudioLevelChanged?.Invoke(
+            this,
+            new AudioLevelChangedEventArgs(peak / 32768d));
     }
 
     private void HandleRecordingStopped(

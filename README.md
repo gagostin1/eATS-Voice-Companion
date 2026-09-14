@@ -16,6 +16,7 @@ Created and maintained by **Gus Agostinho**.
 ## What it does
 
 - Records with an on-screen button or configurable global push-to-talk hotkey
+- Displays live microphone levels, ignores genuinely empty recordings, and warns without blocking when audio is unusually quiet, short, or clipped
 - Provides a small always-on-top controller view and keeps global PTT active when minimized to the system tray
 - Transcribes locally with Whisper and uses active eATS traffic as recognition context
 - Recognizes airline and U.S. N-number callsigns

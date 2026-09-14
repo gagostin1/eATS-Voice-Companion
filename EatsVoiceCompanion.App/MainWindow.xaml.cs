@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private readonly MicrophoneService _microphoneService;
     private readonly RecordingStorageService _recordingStorage;
     private readonly AudioRecorder _audioRecorder;
+    private readonly AudioQualityAnalyzer _audioQualityAnalyzer;
     private readonly SpeechRecognitionService _speechRecognitionService;
     private readonly EatsCommandStager _commandStager;
     private readonly CorrectionHistoryService _correctionHistoryService;
@@ -98,6 +99,7 @@ public partial class MainWindow : Window
             _settings.RecordingRetentionDays,
             _settings.MaximumSavedRecordings);
         _audioRecorder = new AudioRecorder(_recordingStorage);
+        _audioQualityAnalyzer = new AudioQualityAnalyzer();
         _speechRecognitionService = new SpeechRecognitionService(
             logger: _logger);
         _commandStager = new EatsCommandStager();
@@ -114,6 +116,7 @@ public partial class MainWindow : Window
 
         _audioRecorder.RecordingCompleted +=
             AudioRecorder_RecordingCompleted;
+        _audioRecorder.AudioLevelChanged += AudioRecorder_AudioLevelChanged;
 
         int deletedRecordings = _recordingStorage.Cleanup();
 
@@ -852,6 +855,9 @@ public partial class MainWindow : Window
             _recordingStartedByHotkey = !captureMouse;
             _currentVoiceHistoryEntryId = null;
             ResetVoiceFeedback();
+            RecordingLevelBar.Value = 0;
+            AudioQualityStatusText.Foreground = Brushes.DimGray;
+            AudioQualityStatusText.Text = "Monitoring microphone level...";
 
             SaveSettingsButton.IsEnabled = false;
             InterpretTranscriptButton.IsEnabled = false;
@@ -925,6 +931,17 @@ public partial class MainWindow : Window
 
         _audioRecorder.Stop();
         _recordingStartedByHotkey = false;
+    }
+
+    private void AudioRecorder_AudioLevelChanged(
+        object? sender,
+        AudioLevelChangedEventArgs e)
+    {
+        if (!Dispatcher.HasShutdownStarted)
+        {
+            _ = Dispatcher.BeginInvoke(() =>
+                RecordingLevelBar.Value = e.PeakLevel * 100);
+        }
     }
 
     private void InitializePushToTalkHotkey()
@@ -1310,6 +1327,10 @@ public partial class MainWindow : Window
             await Dispatcher.InvokeAsync(() =>
             {
                 SetTranscriptionControls(isBusy: false);
+                RecordingLevelBar.Value = 0;
+                AudioQualityStatusText.Foreground = Brushes.Firebrick;
+                AudioQualityStatusText.Text =
+                    "Audio quality could not be checked because recording failed.";
                 RecordingStatusText.Text =
                     $"Recording failed: {e.Error.Message}";
                 SpeechStatusText.Text =
@@ -1324,6 +1345,63 @@ public partial class MainWindow : Window
                 "Audio recording failed.",
                 e.Error);
             return;
+        }
+
+        AudioQualityResult? audioQuality = null;
+
+        try
+        {
+            audioQuality = await Task.Run(
+                () => _audioQualityAnalyzer.Analyze(e.FilePath),
+                _lifetimeCancellation.Token);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                RecordingLevelBar.Value = 0;
+                ApplyAudioQuality(audioQuality);
+            });
+
+            if (audioQuality.IsEffectivelySilent)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    SetTranscriptionControls(isBusy: false);
+                    RecordingStatusText.Text = "Empty recording ignored.";
+                    TranscriptText.Text = "No meaningful audio was detected.";
+                    SpeechStatusText.Text =
+                        "Speech recognition was not run for an empty recording.";
+                    ShowCommandError(
+                        "No command generated.",
+                        "the recording contained no meaningful audio.");
+                });
+                _logger.Information(
+                    "SilentRecordingIgnored",
+                    "A recording containing no meaningful audio was ignored.",
+                    new
+                    {
+                        audioQuality.DurationSeconds,
+                        audioQuality.RmsDbfs,
+                        audioQuality.PeakDbfs
+                    });
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                RecordingLevelBar.Value = 0;
+                AudioQualityStatusText.Foreground = Brushes.DarkGoldenrod;
+                AudioQualityStatusText.Text =
+                    "Audio quality could not be measured. Recognition continued.";
+            });
+            _logger.Warning(
+                "AudioQualityAnalysisFailed",
+                $"Audio quality could not be measured: {exception.Message}");
         }
 
         using CancellationTokenSource cancellation =
@@ -1403,7 +1481,8 @@ public partial class MainWindow : Window
                 SaveVoiceAttemptToHistory(
                     e.FilePath,
                     transcript,
-                    workflow.ContextAfterTranscription);
+                    workflow.ContextAfterTranscription,
+                    audioQuality);
             });
 
             _logger.Information(
@@ -1522,7 +1601,8 @@ public partial class MainWindow : Window
     private void SaveVoiceAttemptToHistory(
         string recordingFilePath,
         string transcript,
-        RecognitionContextResult context)
+        RecognitionContextResult context,
+        AudioQualityResult? audioQuality)
     {
         try
         {
@@ -1532,6 +1612,12 @@ public partial class MainWindow : Window
                 OriginalTranscript = transcript,
                 GeneratedCommand = TryGetValidatedPreviewCommand(),
                 WasBestEffort = _currentPreviewWasRecovered,
+                AudioDurationSeconds = audioQuality?.DurationSeconds,
+                AudioRmsDbfs = audioQuality?.RmsDbfs,
+                AudioPeakDbfs = audioQuality?.PeakDbfs,
+                AudioClippedSamplePercent =
+                    audioQuality?.ClippedSamplePercent,
+                AudioQualitySeverity = audioQuality?.Severity,
                 ControllerPosition = ControllerPositionTextBox.Text.Trim(),
                 RecognitionPrompt = context.Prompt,
                 ActiveCallsigns = context.ActiveCallsigns
@@ -1563,6 +1649,18 @@ public partial class MainWindow : Window
                 "The completed voice attempt could not be added to history.",
                 exception);
         }
+    }
+
+    private void ApplyAudioQuality(AudioQualityResult quality)
+    {
+        AudioQualityStatusText.Foreground = quality.Severity switch
+        {
+            AudioQualitySeverity.Good => Brushes.ForestGreen,
+            AudioQualitySeverity.Warning => Brushes.DarkGoldenrod,
+            AudioQualitySeverity.Silent => Brushes.Firebrick,
+            _ => Brushes.DimGray
+        };
+        AudioQualityStatusText.Text = quality.Message;
     }
 
     private void SaveCurrentVoiceCorrection(string correctedTranscript)
@@ -1878,6 +1976,12 @@ public partial class MainWindow : Window
                 : entry.UseForLocalLearning
                     ? " · Local learning active"
                     : " · Local learning excluded");
+        if (entry.AudioDurationSeconds is { } duration &&
+            entry.AudioRmsDbfs is { } rms)
+        {
+            HistoryDetailStatusText.Text +=
+                $" · Audio {duration:0.0}s at {rms:0} dBFS";
+        }
         ToggleHistoryLearningButton.Content = entry.UseForLocalLearning
             ? "Exclude from learning"
             : "Include in learning";
@@ -2697,6 +2801,7 @@ public partial class MainWindow : Window
 
         _audioRecorder.RecordingCompleted -=
             AudioRecorder_RecordingCompleted;
+        _audioRecorder.AudioLevelChanged -= AudioRecorder_AudioLevelChanged;
         if (_pushToTalkHotkeyService is not null)
         {
             DisposePushToTalkHotkeyService();

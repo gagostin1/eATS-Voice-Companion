@@ -138,9 +138,17 @@
                             PreviewMouseLeftButtonDown="CalibrationRecordButton_MouseDown"
                             PreviewMouseLeftButtonUp="CalibrationRecordButton_MouseUp"
                             Content="Hold to record" Style="{StaticResource PrimaryButton}"/>
+                    <ProgressBar x:Name="CalibrationLevelBar"
+                                 Width="280" Height="8" Margin="0,10,0,0"
+                                 HorizontalAlignment="Left" Maximum="100"
+                                 Foreground="#FF22C55E"/>
                     <TextBlock x:Name="CalibrationStatusText" Margin="0,10,0,0"
                                Foreground="{StaticResource MutedBrush}"
                                Text="Use the assigned PTT key or hold the button."
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="CalibrationQualityText" Margin="0,7,0,0"
+                               Foreground="{StaticResource MutedBrush}"
+                               Text="Audio quality will be checked automatically."
                                TextWrapping="Wrap"/>
                 </StackPanel>
 

@@ -8,6 +8,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- Live microphone meters and local WAV quality analysis detect empty audio, low levels, short recordings, and clipping; only genuinely silent recordings are skipped while marginal speech continues through best-effort recognition
 - Compact controller mode keeps recording, transcript, command, and immediate feedback controls in a small always-on-top view; minimizing moves the app to the system tray while global PTT remains active
 - A persistent **Always on top** setting keeps the companion visible above eATS and other applications
 - Inline **Looks right** and **Fix this** actions review the latest voice attempt immediately, with a compact prefilled correction form that updates local recognition memory without restaging the command

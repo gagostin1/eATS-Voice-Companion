@@ -11,6 +11,7 @@ public partial class VoiceCalibrationWindow : Window
 {
     private readonly MicrophoneService _microphoneService;
     private readonly AudioRecorder _audioRecorder;
+    private readonly AudioQualityAnalyzer _audioQualityAnalyzer = new();
     private readonly ISpeechRecognitionService _speechRecognitionService;
     private readonly CorrectionHistoryService _historyService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
@@ -41,6 +42,7 @@ public partial class VoiceCalibrationWindow : Window
 
         InitializeComponent();
         _audioRecorder.RecordingCompleted += RecordingCompleted;
+        _audioRecorder.AudioLevelChanged += AudioLevelChanged;
         LoadMicrophones(preferredMicrophoneName);
         UpdateHotkeyUi();
         InitializeHotkeyService();
@@ -223,6 +225,10 @@ public partial class VoiceCalibrationWindow : Window
             $"Hold {_hotkey} or the record button, read the phrase, then release.";
         CalibrationRecordButton.Content = "Hold to record";
         CalibrationRecordButton.IsEnabled = true;
+        CalibrationLevelBar.Value = 0;
+        CalibrationQualityText.Foreground = Brushes.DimGray;
+        CalibrationQualityText.Text =
+            "Audio quality will be checked automatically.";
         SkipPhraseButton.IsEnabled = true;
         ResultPanel.Visibility = Visibility.Collapsed;
         RetryButton.IsEnabled = false;
@@ -282,6 +288,9 @@ public partial class VoiceCalibrationWindow : Window
 
             _pendingRecordingPath = _audioRecorder.Start(
                 microphone.DeviceNumber);
+            CalibrationLevelBar.Value = 0;
+            CalibrationQualityText.Foreground = Brushes.DimGray;
+            CalibrationQualityText.Text = "Monitoring microphone level...";
             CalibrationRecordButton.Content = "Recording — release to stop";
             CalibrationStatusText.Foreground = Brushes.Firebrick;
             CalibrationStatusText.Text = $"Listening through {microphone.Name}...";
@@ -317,6 +326,17 @@ public partial class VoiceCalibrationWindow : Window
         _audioRecorder.Stop();
     }
 
+    private void AudioLevelChanged(
+        object? sender,
+        AudioLevelChangedEventArgs e)
+    {
+        if (!Dispatcher.HasShutdownStarted)
+        {
+            _ = Dispatcher.BeginInvoke(() =>
+                CalibrationLevelBar.Value = e.PeakLevel * 100);
+        }
+    }
+
     private async void RecordingCompleted(
         object? sender,
         AudioRecordingCompletedEventArgs e)
@@ -325,6 +345,10 @@ public partial class VoiceCalibrationWindow : Window
         {
             await Dispatcher.InvokeAsync(() =>
             {
+                CalibrationLevelBar.Value = 0;
+                CalibrationQualityText.Foreground = Brushes.Firebrick;
+                CalibrationQualityText.Text =
+                    "Audio quality could not be checked because recording failed.";
                 CalibrationStatusText.Foreground = Brushes.Firebrick;
                 CalibrationStatusText.Text =
                     $"Recording failed: {e.Error.Message}";
@@ -337,6 +361,34 @@ public partial class VoiceCalibrationWindow : Window
 
         try
         {
+            AudioQualityResult quality = await Task.Run(
+                () => _audioQualityAnalyzer.Analyze(e.FilePath),
+                _lifetimeCancellation.Token);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                CalibrationLevelBar.Value = 0;
+                CalibrationQualityText.Foreground = quality.Severity switch
+                {
+                    AudioQualitySeverity.Good => Brushes.ForestGreen,
+                    AudioQualitySeverity.Warning => Brushes.DarkGoldenrod,
+                    AudioQualitySeverity.Silent => Brushes.Firebrick,
+                    _ => Brushes.DimGray
+                };
+                CalibrationQualityText.Text = quality.Message;
+            });
+
+            if (quality.IsEffectivelySilent)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    CalibrationStatusText.Foreground = Brushes.DarkGoldenrod;
+                    CalibrationStatusText.Text =
+                        "No speech was detected. Retry or skip this phrase.";
+                    RetryButton.IsEnabled = true;
+                });
+                return;
+            }
+
             IProgress<string> progress = new Progress<string>(message =>
                 _ = Dispatcher.BeginInvoke(() =>
                     CalibrationStatusText.Text = message));
@@ -493,6 +545,7 @@ public partial class VoiceCalibrationWindow : Window
     {
         _lifetimeCancellation.Cancel();
         _audioRecorder.RecordingCompleted -= RecordingCompleted;
+        _audioRecorder.AudioLevelChanged -= AudioLevelChanged;
         _audioRecorder.Dispose();
         if (_hotkeyService is not null)
         {

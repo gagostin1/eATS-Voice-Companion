@@ -211,6 +211,12 @@
                                             PreviewMouseLeftButtonDown="RecordButton_MouseDown"
                                             PreviewMouseLeftButtonUp="RecordButton_MouseUp"
                                             Style="{StaticResource RecordButtonStyle}"/>
+                                    <ProgressBar x:Name="RecordingLevelBar"
+                                                 Width="260" Height="8"
+                                                 Margin="0,12,0,0"
+                                                 HorizontalAlignment="Left"
+                                                 Maximum="100"
+                                                 Foreground="#FF22C55E"/>
                                     <TextBlock x:Name="RecordingStatusText"
                                                Margin="0,14,0,0"
                                                MaxHeight="42"
@@ -218,6 +224,11 @@
                                                Text="Ready for your first transmission."
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="AudioQualityStatusText"
+                                               Margin="0,7,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="Audio quality will be checked after each recording."
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <Border Grid.Column="1"
@@ -769,6 +780,12 @@
                                                Margin="0,12,0,0"
                                                Foreground="{StaticResource MutedBrush}"
                                                TextWrapping="Wrap"/>
+                                    <TextBlock Margin="0,14,0,6"
+                                               Style="{StaticResource FieldLabelStyle}"
+                                               Text="Live input level while recording"/>
+                                    <ProgressBar Height="10" Maximum="100"
+                                                 Foreground="#FF22C55E"
+                                                 Value="{Binding Value, ElementName=RecordingLevelBar}"/>
                                     <TextBlock Margin="0,18,0,0"
                                                Style="{StaticResource FieldLabelStyle}"
                                                Text="Global push-to-talk hotkey"/>
@@ -992,9 +1009,16 @@
                                     PreviewMouseLeftButtonDown="CompactRecordButton_MouseDown"
                                     PreviewMouseLeftButtonUp="CompactRecordButton_MouseUp"
                                     Style="{StaticResource RecordButtonStyle}"/>
+                            <ProgressBar Height="8" Margin="0,10,0,0"
+                                         Maximum="100" Foreground="#FF22C55E"
+                                         Value="{Binding Value, ElementName=RecordingLevelBar}"/>
                             <TextBlock Margin="0,10,0,0"
                                        Foreground="{StaticResource MutedBrush}"
                                        Text="{Binding Text, ElementName=RecordingStatusText}"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Margin="0,7,0,0"
+                                       Foreground="{Binding Foreground, ElementName=AudioQualityStatusText}"
+                                       Text="{Binding Text, ElementName=AudioQualityStatusText}"
                                        TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
