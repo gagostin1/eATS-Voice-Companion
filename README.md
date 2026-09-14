@@ -16,6 +16,7 @@ Created and maintained by **Gus Agostinho**.
 ## What it does
 
 - Records with an on-screen button or configurable global push-to-talk hotkey
+- Provides a small always-on-top controller view and keeps global PTT active when minimized to the system tray
 - Transcribes locally with Whisper and uses active eATS traffic as recognition context
 - Recognizes airline and U.S. N-number callsigns
 - Uses assigned STARs, flight plans, airways, and route fixes to improve command interpretation

@@ -10,6 +10,12 @@ using EatsVoiceCompanion.Core.Commands;
 using EatsVoiceCompanion.Core.Safety;
 using EatsVoiceCompanion.Core.Speech;
 using Microsoft.Win32;
+using Button = System.Windows.Controls.Button;
+using Brushes = System.Windows.Media.Brushes;
+using Forms = System.Windows.Forms;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MessageBox = System.Windows.MessageBox;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace EatsVoiceCompanion.App;
 
@@ -71,6 +77,15 @@ public partial class MainWindow : Window
     private bool _recordingStartedByHotkey;
     private IReadOnlyList<CorrectionHistoryEntry> _correctionHistory = [];
     private Guid? _currentVoiceHistoryEntryId;
+    private readonly Forms.NotifyIcon _trayIcon;
+    private Button? _mouseRecordingButton;
+    private bool _isCompactMode;
+    private bool _trayHintShown;
+    private double _fullWindowWidth;
+    private double _fullWindowHeight;
+    private double _fullWindowLeft;
+    private double _fullWindowTop;
+    private WindowState _fullWindowState = WindowState.Normal;
 
     public MainWindow()
     {
@@ -90,6 +105,7 @@ public partial class MainWindow : Window
         _correctionMemoryService = new LocalCorrectionMemoryService();
 
         InitializeComponent();
+        _trayIcon = CreateTrayIcon();
         FitWindowToWorkArea();
         ApplySettingsToUi();
         Loaded += MainWindow_Loaded;
@@ -794,10 +810,12 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
 
-        StartActiveRecording(captureMouse: true);
+        StartActiveRecording(captureMouse: true, RecordButton);
     }
 
-    private void StartActiveRecording(bool captureMouse)
+    private void StartActiveRecording(
+        bool captureMouse,
+        Button? mouseButton = null)
     {
         if (_audioRecorder.IsRecording ||
             _transcriptionCancellation is not null ||
@@ -824,7 +842,8 @@ public partial class MainWindow : Window
         {
             if (captureMouse)
             {
-                RecordButton.CaptureMouse();
+                _mouseRecordingButton = mouseButton ?? RecordButton;
+                _mouseRecordingButton.CaptureMouse();
             }
 
             string filePath = _audioRecorder.Start(
@@ -848,10 +867,11 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            if (RecordButton.IsMouseCaptured)
+            if (_mouseRecordingButton?.IsMouseCaptured == true)
             {
-                RecordButton.ReleaseMouseCapture();
+                _mouseRecordingButton.ReleaseMouseCapture();
             }
+            _mouseRecordingButton = null;
 
             _recordingStartedByHotkey = false;
             RecordButton.Content = "Hold to record";
@@ -888,10 +908,11 @@ public partial class MainWindow : Window
 
     private void StopActiveRecording()
     {
-        if (RecordButton.IsMouseCaptured)
+        if (_mouseRecordingButton?.IsMouseCaptured == true)
         {
-            RecordButton.ReleaseMouseCapture();
+            _mouseRecordingButton.ReleaseMouseCapture();
         }
+        _mouseRecordingButton = null;
 
         if (!_audioRecorder.IsRecording)
         {
@@ -962,6 +983,159 @@ public partial class MainWindow : Window
                 StartActiveRecording(captureMouse: false);
             }
         });
+    }
+
+    private void CompactRecordButton_MouseDown(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        StartActiveRecording(captureMouse: true, CompactRecordButton);
+    }
+
+    private void CompactRecordButton_MouseUp(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        StopActiveRecording();
+    }
+
+    private void EnterCompactMode_Click(object sender, RoutedEventArgs e) =>
+        EnterCompactMode();
+
+    private void EnterCompactMode()
+    {
+        if (_isCompactMode)
+        {
+            return;
+        }
+
+        _fullWindowWidth = ActualWidth;
+        _fullWindowHeight = ActualHeight;
+        _fullWindowLeft = Left;
+        _fullWindowTop = Top;
+        _fullWindowState = WindowState;
+        WindowState = WindowState.Normal;
+        _isCompactMode = true;
+        FullHeader.Visibility = Visibility.Collapsed;
+        FullTabControl.Visibility = Visibility.Collapsed;
+        CompactViewRoot.Visibility = Visibility.Visible;
+
+        Rect workArea = SystemParameters.WorkArea;
+        MinWidth = Math.Min(460, workArea.Width * 0.80);
+        MinHeight = Math.Min(620, workArea.Height * 0.80);
+        Width = Math.Min(540, workArea.Width * 0.90);
+        Height = Math.Min(760, workArea.Height * 0.94);
+        Left = Math.Clamp(
+            _fullWindowLeft,
+            workArea.Left,
+            Math.Max(workArea.Left, workArea.Right - Width));
+        Top = Math.Clamp(
+            _fullWindowTop,
+            workArea.Top,
+            Math.Max(workArea.Top, workArea.Bottom - Height));
+        Topmost = true;
+    }
+
+    private void ExitCompactMode_Click(object sender, RoutedEventArgs e) =>
+        ExitCompactMode();
+
+    private void ExitCompactMode()
+    {
+        if (!_isCompactMode)
+        {
+            return;
+        }
+
+        _isCompactMode = false;
+        CompactViewRoot.Visibility = Visibility.Collapsed;
+        FullHeader.Visibility = Visibility.Visible;
+        FullTabControl.Visibility = Visibility.Visible;
+        FitWindowToWorkArea();
+        Width = Math.Min(_fullWindowWidth, MaxWidth);
+        Height = Math.Min(_fullWindowHeight, MaxHeight);
+        Rect workArea = SystemParameters.WorkArea;
+        Left = Math.Clamp(
+            _fullWindowLeft,
+            workArea.Left,
+            Math.Max(workArea.Left, workArea.Right - Width));
+        Top = Math.Clamp(
+            _fullWindowTop,
+            workArea.Top,
+            Math.Max(workArea.Top, workArea.Bottom - Height));
+        Topmost = _settings.AlwaysOnTop;
+        if (_fullWindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void CompactFixThis_Click(object sender, RoutedEventArgs e)
+    {
+        ExitCompactMode();
+        FullTabControl.SelectedIndex = 0;
+        VoiceFixThis_Click(sender, e);
+    }
+
+    private Forms.NotifyIcon CreateTrayIcon()
+    {
+        Forms.ContextMenuStrip menu = new();
+        menu.Items.Add("Open full view", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                RestoreFromTray();
+                ExitCompactMode();
+            })));
+        menu.Items.Add("Open compact mode", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                RestoreFromTray();
+                EnterCompactMode();
+            })));
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Exit", null, (_, _) =>
+            Dispatcher.BeginInvoke(new Action(Close)));
+
+        Forms.NotifyIcon trayIcon = new()
+        {
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(
+                Environment.ProcessPath ??
+                throw new InvalidOperationException(
+                    "The application path could not be determined.")),
+            Text = "eATS Voice Companion — PTT active",
+            ContextMenuStrip = menu,
+            Visible = true
+        };
+        trayIcon.DoubleClick += (_, _) =>
+            Dispatcher.BeginInvoke(new Action(RestoreFromTray));
+        return trayIcon;
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState != WindowState.Minimized)
+        {
+            return;
+        }
+
+        Hide();
+        if (!_trayHintShown)
+        {
+            _trayHintShown = true;
+            _trayIcon.ShowBalloonTip(
+                2500,
+                "eATS Voice Companion is still running",
+                "Global push-to-talk remains active. Double-click the tray icon to restore the window.",
+                Forms.ToolTipIcon.Info);
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
     }
 
     private void PushToTalkHotkeyService_Released(
@@ -2529,6 +2703,8 @@ public partial class MainWindow : Window
         }
 
         _audioRecorder.Dispose();
+        _trayIcon.Visible = false;
+        _trayIcon.Dispose();
 
         _logger.Information(
             "ApplicationClosed",

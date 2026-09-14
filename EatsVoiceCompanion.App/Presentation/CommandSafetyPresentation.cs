@@ -1,5 +1,7 @@
 using System.Windows.Media;
 using EatsVoiceCompanion.Core.Safety;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
 
 namespace EatsVoiceCompanion.App.Presentation;
 

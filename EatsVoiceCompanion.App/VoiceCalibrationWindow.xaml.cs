@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using EatsVoiceCompanion.App.Services;
+using Brushes = System.Windows.Media.Brushes;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace EatsVoiceCompanion.App;
 

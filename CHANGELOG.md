@@ -8,6 +8,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ### Added
 
+- Compact controller mode keeps recording, transcript, command, and immediate feedback controls in a small always-on-top view; minimizing moves the app to the system tray while global PTT remains active
 - A persistent **Always on top** setting keeps the companion visible above eATS and other applications
 - Inline **Looks right** and **Fix this** actions review the latest voice attempt immediately, with a compact prefilled correction form that updates local recognition memory without restaging the command
 - A first-run, no-eATS-required voice setup wizard configures the microphone and pass-through PTT hotkey, automatically compares ten varied ATC phrases, feeds mismatches into local correction memory, and presents a completion summary

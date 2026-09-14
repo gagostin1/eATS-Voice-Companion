@@ -10,6 +10,7 @@
         Deactivated="MainWindow_Deactivated"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         PreviewKeyUp="MainWindow_PreviewKeyUp"
+        StateChanged="MainWindow_StateChanged"
         FontFamily="Segoe UI"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -134,7 +135,7 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Padding="30,22" Background="#FF0F172A">
+        <Border x:Name="FullHeader" Grid.Row="0" Padding="30,22" Background="#FF0F172A">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -154,23 +155,31 @@
                                FontWeight="SemiBold"
                                Text="Created by Gus Agostinho"/>
                 </StackPanel>
-                <Border Grid.Column="1"
-                        Padding="12,7"
-                        VerticalAlignment="Center"
-                        Background="#FF172554"
-                        CornerRadius="18">
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="8" Height="8" Margin="0,0,8,0"
-                                 VerticalAlignment="Center" Fill="#FF60A5FA"/>
-                        <TextBlock Foreground="#FFDBEAFE"
-                                   FontWeight="SemiBold"
-                                   Text="LOCAL + STAGE ONLY"/>
-                    </StackPanel>
-                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                    <Button Margin="0,0,12,0"
+                            Padding="14,7"
+                            Background="#FF1E3A5F"
+                            Foreground="White"
+                            Click="EnterCompactMode_Click"
+                            Content="Compact mode"
+                            Style="{StaticResource BaseButtonStyle}"/>
+                    <Border Padding="12,7"
+                            Background="#FF172554"
+                            CornerRadius="18">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0"
+                                     VerticalAlignment="Center" Fill="#FF60A5FA"/>
+                            <TextBlock Foreground="#FFDBEAFE"
+                                       FontWeight="SemiBold"
+                                       Text="LOCAL + STAGE ONLY"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <TabControl Grid.Row="1"
+        <TabControl x:Name="FullTabControl" Grid.Row="1"
                     Margin="24,18,24,24"
                     Background="Transparent"
                     BorderThickness="0"
@@ -937,5 +946,126 @@
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <Grid x:Name="CompactViewRoot"
+              Grid.RowSpan="2"
+              Panel.ZIndex="10"
+              Background="#FFF4F7FB"
+              Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border Padding="18,14" Background="#FF0F172A">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Foreground="White" FontSize="19"
+                                   FontWeight="SemiBold" Text="eATS Voice Companion"/>
+                        <TextBlock Margin="0,3,0,0" Foreground="#FF93C5FD"
+                                   FontSize="12" Text="COMPACT CONTROLLER MODE"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Padding="14,7"
+                            Click="ExitCompactMode_Click"
+                            Content="Full view"
+                            Style="{StaticResource BaseButtonStyle}"/>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1" Padding="16"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Foreground="#FF1E40AF" FontWeight="SemiBold"
+                                       Text="{Binding Text, ElementName=VoiceHotkeyHintText}"
+                                       TextWrapping="Wrap"/>
+                            <Button x:Name="CompactRecordButton"
+                                    Margin="0,12,0,0"
+                                    HorizontalAlignment="Stretch"
+                                    Content="{Binding Content, ElementName=RecordButton}"
+                                    IsEnabled="{Binding IsEnabled, ElementName=RecordButton}"
+                                    PreviewMouseLeftButtonDown="CompactRecordButton_MouseDown"
+                                    PreviewMouseLeftButtonUp="CompactRecordButton_MouseUp"
+                                    Style="{StaticResource RecordButtonStyle}"/>
+                            <TextBlock Margin="0,10,0,0"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       Text="{Binding Text, ElementName=RecordingStatusText}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,12,0,0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                       Text="Transcript"/>
+                            <TextBlock Margin="0,9,0,0" FontSize="15"
+                                       Foreground="{StaticResource InkBrush}"
+                                       Text="{Binding Text, ElementName=TranscriptText}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,12,0,0" Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                       Text="Latest command"/>
+                            <Border Margin="0,10,0,0" Padding="14"
+                                    Background="#FF0B1220" CornerRadius="8">
+                                <TextBlock FontFamily="Consolas" FontSize="18"
+                                           FontWeight="SemiBold" Foreground="White"
+                                           Text="{Binding Text, ElementName=PreviewText}"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+                            <TextBlock Margin="0,10,0,0" FontWeight="SemiBold"
+                                       Foreground="{Binding Foreground, ElementName=CommandSafetyStatusText}"
+                                       Text="{Binding Text, ElementName=CommandSafetyStatusText}"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Margin="0,7,0,0"
+                                       Foreground="{Binding Foreground, ElementName=CommandStageStatusText}"
+                                       Text="{Binding Text, ElementName=CommandStageStatusText}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,12,0,0"
+                            Padding="16"
+                            Background="White"
+                            BorderBrush="{StaticResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Visibility="{Binding Visibility, ElementName=VoiceFeedbackPanel}">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource InkBrush}"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding Text, ElementName=VoiceFeedbackPromptText}"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Margin="0,10,0,0"
+                                        Orientation="Horizontal"
+                                        Visibility="{Binding Visibility, ElementName=VoiceFeedbackButtonRow}">
+                                <Button Padding="14,7"
+                                        Click="VoiceLooksRight_Click"
+                                        Content="Looks right"
+                                        IsEnabled="{Binding IsEnabled, ElementName=VoiceLooksRightButton}"
+                                        Style="{StaticResource PrimaryButtonStyle}"/>
+                                <Button Margin="8,0,0,0" Padding="14,7"
+                                        Click="CompactFixThis_Click"
+                                        Content="Fix this"
+                                        IsEnabled="{Binding IsEnabled, ElementName=VoiceFixThisButton}"
+                                        Style="{StaticResource BaseButtonStyle}"/>
+                            </StackPanel>
+                            <TextBlock Margin="0,9,0,0"
+                                       Foreground="{Binding Foreground, ElementName=VoiceFeedbackStatusText}"
+                                       Text="{Binding Text, ElementName=VoiceFeedbackStatusText}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>
