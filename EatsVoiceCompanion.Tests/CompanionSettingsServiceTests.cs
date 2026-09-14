@@ -26,6 +26,8 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             AlwaysOnTop = true,
             ParticipateInRecognitionImprovement = false,
             ContributionNoticeShown = true,
+            ContributionInstallationId =
+                "63bd5c25-0c57-4f5d-8235-dcbf5ee0e44c",
             PushToTalkHotkey = "Ctrl+Shift+F9",
             VoiceCalibrationVersion = 1
         };
@@ -49,6 +51,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(
             expected.ContributionNoticeShown,
             actual.ContributionNoticeShown);
+        Assert.Equal(
+            expected.ContributionInstallationId,
+            actual.ContributionInstallationId);
         Assert.Equal(expected.PushToTalkHotkey, actual.PushToTalkHotkey);
         Assert.Equal(
             expected.VoiceCalibrationVersion,
@@ -70,6 +75,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.False(result.AlwaysOnTop);
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
+        Assert.True(Guid.TryParse(
+            result.ContributionInstallationId,
+            out _));
         Assert.Null(result.PushToTalkHotkey);
         Assert.Equal(0, result.VoiceCalibrationVersion);
     }

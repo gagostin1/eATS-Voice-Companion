@@ -935,7 +935,7 @@
                                               Content="Participate in recognition improvement"/>
                                     <TextBlock Margin="22,8,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="Enabled by default. Saved corrections are sanitized into the local outbox for review, but nothing is uploaded automatically. Microphone audio is never queued."
+                                               Text="Enabled by default. Saved corrections are sanitized into the local outbox. Nothing is uploaded until you choose Send pending. Microphone audio is never queued or sent."
                                                TextWrapping="Wrap"/>
                                     <Border Margin="0,18,0,0"
                                             Padding="16"
@@ -975,7 +975,13 @@
                                             </Grid>
                                             <StackPanel Margin="0,12,0,0"
                                                         Orientation="Horizontal">
+                                                <Button x:Name="SendContributionOutboxButton"
+                                                        Click="SendContributionOutbox_Click"
+                                                        Content="Send pending"
+                                                        IsEnabled="False"
+                                                        Style="{StaticResource PrimaryButtonStyle}"/>
                                                 <Button Click="RefreshContributionOutbox_Click"
+                                                        Margin="8,0,0,0"
                                                         Content="Refresh outbox"
                                                         Style="{StaticResource BaseButtonStyle}"/>
                                                 <Button x:Name="DeleteContributionButton"
@@ -991,6 +997,10 @@
                                                         IsEnabled="False"
                                                         Style="{StaticResource BaseButtonStyle}"/>
                                             </StackPanel>
+                                            <TextBlock x:Name="SentContributionSummaryText"
+                                                       Margin="0,10,0,0"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>

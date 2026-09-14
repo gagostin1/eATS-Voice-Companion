@@ -12,6 +12,15 @@ Regression cases preserve real recognition failures as automated tests. They con
 
 You can attach the JSON to the [speech-recognition issue form](https://github.com/gagostin1/eATS-Voice-Companion/issues/new?template=speech_recognition.yml). Audio is never part of the regression-case export.
 
+## Send queued corrections
+
+When recognition-improvement participation is enabled, saving a correction
+also places a sanitized schema-v2 case in **Settings > Development feedback**.
+Nothing is sent automatically. Review the JSON and select **Send pending** to
+submit the queued cases to the project. Confirmed submissions move to a local
+sent archive; if the service cannot confirm receipt, the case stays pending so
+it can be retried safely.
+
 ## Add a case in a pull request
 
 Place the exported JSON in [`regression-cases/speech`](../regression-cases/speech). Use a short descriptive filename, keep one case per file, and do not manually add audio, local paths, or unrelated traffic.

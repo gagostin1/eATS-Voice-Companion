@@ -15,6 +15,17 @@ public sealed record CorrectionContributionOutboxItem(
         $"{RegressionCase.Callsign} · {RegressionCase.ExpectedCommand}";
 }
 
+public sealed record CorrectionContributionReceipt(
+    string ReceiptId,
+    string Status,
+    DateTimeOffset SentAtUtc,
+    CorrectionRegressionCase Contribution)
+{
+    public string DisplayTitle =>
+        $"{SentAtUtc.ToLocalTime():g} · {Contribution.Callsign} · " +
+        Contribution.ExpectedCommand;
+}
+
 public sealed class CorrectionContributionOutboxService
 {
     private const int MaximumItems = 500;
@@ -29,7 +40,8 @@ public sealed class CorrectionContributionOutboxService
 
     public CorrectionContributionOutboxService(
         CorrectionHistoryService historyService,
-        string? outboxDirectory = null)
+        string? outboxDirectory = null,
+        string? sentDirectory = null)
     {
         _historyService = historyService;
         OutboxDirectory = outboxDirectory ?? Path.Combine(
@@ -37,9 +49,16 @@ public sealed class CorrectionContributionOutboxService
                 Environment.SpecialFolder.LocalApplicationData),
             "EatsVoiceCompanion",
             "ContributionOutbox");
+        SentDirectory = sentDirectory ?? Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
+            "EatsVoiceCompanion",
+            "SentContributions");
     }
 
     public string OutboxDirectory { get; }
+
+    public string SentDirectory { get; }
 
     public bool Enqueue(
         CorrectionHistoryEntry entry,
@@ -155,6 +174,99 @@ public sealed class CorrectionContributionOutboxService
         File.Delete(fullPath);
     }
 
+    public void MarkSent(
+        CorrectionContributionOutboxItem item,
+        string receiptId,
+        string status,
+        DateTimeOffset sentAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentException.ThrowIfNullOrWhiteSpace(receiptId);
+
+        if (receiptId.Length != 64 || !receiptId.All(Uri.IsHexDigit))
+        {
+            throw new ArgumentException(
+                "The server receipt identifier is invalid.",
+                nameof(receiptId));
+        }
+
+        if (status is not ("accepted" or "duplicate"))
+        {
+            throw new ArgumentException(
+                "The server receipt status is invalid.",
+                nameof(status));
+        }
+
+        ValidateOutboxItemPath(item);
+        Directory.CreateDirectory(SentDirectory);
+        string destinationPath = Path.Combine(
+            SentDirectory,
+            $"{receiptId.ToLowerInvariant()}.json");
+        string temporaryPath = destinationPath + ".tmp";
+        CorrectionContributionReceipt receipt = new(
+            receiptId.ToLowerInvariant(),
+            status,
+            sentAtUtc.ToUniversalTime(),
+            item.RegressionCase);
+
+        try
+        {
+            File.WriteAllText(
+                temporaryPath,
+                JsonSerializer.Serialize(receipt, SerializerOptions));
+            File.Move(temporaryPath, destinationPath, overwrite: true);
+            File.Delete(item.FilePath);
+        }
+        finally
+        {
+            TryDelete(temporaryPath);
+        }
+    }
+
+    public IReadOnlyList<CorrectionContributionReceipt> LoadSent()
+    {
+        if (!Directory.Exists(SentDirectory))
+        {
+            return [];
+        }
+
+        List<CorrectionContributionReceipt> receipts = [];
+
+        foreach (string path in Directory.EnumerateFiles(
+                     SentDirectory,
+                     "*.json",
+                     SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                CorrectionContributionReceipt? receipt =
+                    JsonSerializer.Deserialize<CorrectionContributionReceipt>(
+                        File.ReadAllText(path),
+                        SerializerOptions);
+                if (receipt is not null)
+                {
+                    receipts.Add(receipt);
+                }
+            }
+            catch (JsonException)
+            {
+                // A damaged receipt must not hide the remaining sent history.
+            }
+            catch (IOException)
+            {
+                // A temporarily unavailable receipt is skipped until refresh.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // A temporarily unavailable receipt is skipped until refresh.
+            }
+        }
+
+        return receipts
+            .OrderByDescending(receipt => receipt.SentAtUtc)
+            .ToArray();
+    }
+
     public int ExportAll(string destinationDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -194,6 +306,22 @@ public sealed class CorrectionContributionOutboxService
         string json = JsonSerializer.Serialize(deduplicationContent);
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private void ValidateOutboxItemPath(
+        CorrectionContributionOutboxItem item)
+    {
+        string fullPath = Path.GetFullPath(item.FilePath);
+        string fullDirectory = Path.GetFullPath(OutboxDirectory);
+
+        if (!string.Equals(
+                Path.GetDirectoryName(fullPath),
+                fullDirectory,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The selected file is outside the contribution outbox.");
+        }
     }
 
     private void TrimExcessItems()

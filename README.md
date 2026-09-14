@@ -24,7 +24,7 @@ Created and maintained by **Gus Agostinho**.
 - Ranks best-effort command hypotheses when the transcript is imperfect
 - Supports multi-instruction transmissions and editable transcript retries
 - Offers immediate **Looks right** / **Fix this** feedback and keeps a private local correction history whose reviewed corrections guide future prompts and route-safe fix recovery, with replay and sanitized regression-case export
-- Automatically queues deduplicated, sanitized v2 regression cases after opted-in corrections; the local outbox can be previewed, selectively deleted, or batch-exported from Settings
+- Automatically queues deduplicated, sanitized v2 regression cases after opted-in corrections; the local outbox can be inspected, deleted, exported, or manually sent from Settings
 - Validates generated tokens and checks callsigns against the current eATS snapshot
 - Automatically stages the best command in eATS while leaving transmission to the controller
 
@@ -77,7 +77,7 @@ dotnet run --project EatsVoiceCompanion.App
 
 ## Privacy
 
-Speech recognition is local. Audio, transcripts, correction history, settings, logs, and the sanitized contribution outbox remain on the computer unless you explicitly export and share them. Audio is never placed in the outbox and is cleaned up according to the app's retention rules.
+Speech recognition is local. Audio, correction history, settings, and logs remain on the computer. Sanitized correction JSON leaves the computer only when you explicitly export it or choose **Send pending**; microphone audio and local file paths are never included. Audio is cleaned up according to the app's retention rules.
 
 ## Project status
 

@@ -74,13 +74,44 @@ public sealed class CorrectionContributionOutboxServiceTests : IDisposable
         Assert.Empty(service.Load());
     }
 
+    [Fact]
+    public void MarkSent_ArchivesReceiptBeforeRemovingPendingCase()
+    {
+        CorrectionContributionOutboxService service = CreateService();
+        Assert.True(service.Enqueue(
+            CreateCorrectedEntry(),
+            "0.3.0",
+            Aliases()));
+        CorrectionContributionOutboxItem item = Assert.Single(service.Load());
+        string receiptId = new('a', 64);
+
+        service.MarkSent(
+            item,
+            receiptId,
+            "accepted",
+            DateTimeOffset.Parse("2026-09-13T21:00:00Z"));
+
+        Assert.Empty(service.Load());
+        CorrectionContributionReceipt receipt =
+            Assert.Single(service.LoadSent());
+        Assert.Equal("accepted", receipt.Status);
+        Assert.Equal("DAL123", receipt.Contribution.Callsign);
+        string receiptJson = File.ReadAllText(Path.Combine(
+            service.SentDirectory,
+            $"{receiptId}.json"));
+        Assert.Contains("\"Status\": \"accepted\"", receiptJson);
+        Assert.Contains("\"Callsign\": \"DAL123\"", receiptJson);
+    }
+
     private CorrectionContributionOutboxService CreateService()
     {
         string historyDirectory = Path.Combine(_directory, "history");
         string outboxDirectory = Path.Combine(_directory, "outbox");
+        string sentDirectory = Path.Combine(_directory, "sent");
         return new CorrectionContributionOutboxService(
             new CorrectionHistoryService(historyDirectory),
-            outboxDirectory);
+            outboxDirectory,
+            sentDirectory);
     }
 
     private static Dictionary<string, string> Aliases() => new()

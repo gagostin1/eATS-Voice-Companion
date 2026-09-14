@@ -27,6 +27,9 @@ public sealed class CompanionSettings
 
     public bool ContributionNoticeShown { get; set; }
 
+    public string ContributionInstallationId { get; set; } =
+        Guid.NewGuid().ToString("D");
+
     public string? PushToTalkHotkey { get; set; }
 
     public int VoiceCalibrationVersion { get; set; }
@@ -75,6 +78,15 @@ public sealed class CompanionSettings
             throw new ArgumentOutOfRangeException(
                 nameof(VoiceCalibrationVersion),
                 "The voice-calibration version cannot be negative.");
+        }
+
+        if (!Guid.TryParse(ContributionInstallationId, out Guid installationId))
+        {
+            ContributionInstallationId = Guid.NewGuid().ToString("D");
+        }
+        else
+        {
+            ContributionInstallationId = installationId.ToString("D");
         }
 
         EatsDataDirectory = Path.GetFullPath(EatsDataDirectory.Trim());

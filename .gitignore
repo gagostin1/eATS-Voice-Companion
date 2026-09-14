@@ -5,6 +5,8 @@
 
 # dotenv files
 .env
+.dev.vars
+.wrangler/
 
 # User-specific files
 *.rsuser

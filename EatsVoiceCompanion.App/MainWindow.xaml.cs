@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private readonly CorrectionHistoryService _correctionHistoryService;
     private readonly CorrectionContributionOutboxService
         _contributionOutboxService;
+    private readonly CorrectionContributionClient _contributionClient;
     private readonly LocalCorrectionMemoryService _correctionMemoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
@@ -111,6 +112,7 @@ public partial class MainWindow : Window
         _contributionOutboxService =
             new CorrectionContributionOutboxService(
                 _correctionHistoryService);
+        _contributionClient = new CorrectionContributionClient();
         _correctionMemoryService = new LocalCorrectionMemoryService();
 
         InitializeComponent();
@@ -239,6 +241,8 @@ public partial class MainWindow : Window
                     RecognitionImprovementCheckBox.IsChecked == true,
                 ContributionNoticeShown =
                     _settings.ContributionNoticeShown,
+                ContributionInstallationId =
+                    _settings.ContributionInstallationId,
                 PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString(),
                 VoiceCalibrationVersion =
                     _settings.VoiceCalibrationVersion
@@ -1954,6 +1958,15 @@ public partial class MainWindow : Window
             ShowContributionOutboxItem(selected);
             ExportContributionOutboxButton.IsEnabled =
                 _contributionOutbox.Count > 0;
+            SendContributionOutboxButton.IsEnabled =
+                _settings.ParticipateInRecognitionImprovement &&
+                _contributionOutbox.Count > 0;
+            IReadOnlyList<CorrectionContributionReceipt> sentReceipts =
+                _contributionOutboxService.LoadSent();
+            SentContributionSummaryText.Text = sentReceipts.Count == 0
+                ? "No corrections have been sent from this computer."
+                : $"Last sent: {sentReceipts[0].DisplayTitle} " +
+                  $"({sentReceipts.Count} total).";
             ContributionOutboxStatusText.Foreground = Brushes.DimGray;
             ContributionOutboxStatusText.Text =
                 !_settings.ParticipateInRecognitionImprovement
@@ -1963,7 +1976,8 @@ public partial class MainWindow : Window
                         ? "No pending corrections. New saved corrections " +
                           "will be queued here automatically."
                         : $"{_contributionOutbox.Count} sanitized correction(s) " +
-                          "waiting locally. Nothing is uploaded automatically.";
+                          $"waiting locally; {sentReceipts.Count} sent previously. " +
+                          "Nothing is uploaded automatically.";
         }
         catch (Exception exception)
         {
@@ -1981,6 +1995,84 @@ public partial class MainWindow : Window
         ShowContributionOutboxItem(
             ContributionOutboxListBox.SelectedItem as
                 CorrectionContributionOutboxItem);
+    }
+
+    private async void SendContributionOutbox_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!_settings.ParticipateInRecognitionImprovement ||
+            _contributionOutbox.Count == 0)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation = MessageBox.Show(
+            this,
+            $"Send {_contributionOutbox.Count} pending sanitized " +
+            "correction(s) to the eATS Voice Companion project? " +
+            "No microphone audio or local file paths will be sent.",
+            "Send recognition improvements",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirmation != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        SendContributionOutboxButton.IsEnabled = false;
+        int sent = 0;
+
+        try
+        {
+            _settingsService.Save(_settings);
+            Guid installationId = Guid.Parse(
+                _settings.ContributionInstallationId);
+
+            foreach (CorrectionContributionOutboxItem item in
+                     _contributionOutbox.ToArray())
+            {
+                CorrectionContributionSendResult result =
+                    await _contributionClient.SendAsync(
+                        item,
+                        installationId,
+                        _lifetimeCancellation.Token);
+                _contributionOutboxService.MarkSent(
+                    item,
+                    result.ReceiptId,
+                    result.Status,
+                    DateTimeOffset.UtcNow);
+                sent++;
+            }
+
+            RefreshContributionOutbox();
+            ContributionOutboxStatusText.Foreground = Brushes.ForestGreen;
+            ContributionOutboxStatusText.Text =
+                $"Sent {sent} sanitized correction(s). No audio was sent.";
+            _logger.Information(
+                "CorrectionContributionsSent",
+                "Pending sanitized corrections were sent.",
+                new { SentCount = sent });
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // The application is closing.
+        }
+        catch (Exception exception)
+        {
+            RefreshContributionOutbox();
+            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
+            ContributionOutboxStatusText.Text =
+                $"Sent {sent} correction(s). The remaining items are still " +
+                $"local and can be retried: {exception.Message}";
+            _logger.Error(
+                "CorrectionContributionSendFailed",
+                "One or more sanitized corrections could not be sent.",
+                exception,
+                new { SentCount = sent });
+        }
     }
 
     private void ShowContributionOutboxItem(
@@ -2977,6 +3069,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _lifetimeCancellation.Cancel();
+        _contributionClient.Dispose();
         _transcriptionCancellation?.Cancel();
 
         _audioRecorder.RecordingCompleted -=
