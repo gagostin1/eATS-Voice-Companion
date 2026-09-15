@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using EatsVoiceCompanion.App.Configuration;
 using EatsVoiceCompanion.App.Presentation;
 using EatsVoiceCompanion.App.Services;
@@ -45,6 +46,7 @@ public partial class MainWindow : Window
     private readonly CorrectionContributionOutboxService
         _contributionOutboxService;
     private readonly CorrectionContributionClient _contributionClient;
+    private readonly DispatcherTimer _contributionRetryTimer;
     private readonly LocalCorrectionMemoryService _correctionMemoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
@@ -92,6 +94,7 @@ public partial class MainWindow : Window
     private double _fullWindowLeft;
     private double _fullWindowTop;
     private WindowState _fullWindowState = WindowState.Normal;
+    private bool _isSendingContributions;
 
     public MainWindow()
     {
@@ -113,6 +116,11 @@ public partial class MainWindow : Window
             new CorrectionContributionOutboxService(
                 _correctionHistoryService);
         _contributionClient = new CorrectionContributionClient();
+        _contributionRetryTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(15)
+        };
+        _contributionRetryTimer.Tick += ContributionRetryTimer_Tick;
         _correctionMemoryService = new LocalCorrectionMemoryService();
 
         InitializeComponent();
@@ -241,6 +249,8 @@ public partial class MainWindow : Window
                     RecognitionImprovementCheckBox.IsChecked == true,
                 ContributionNoticeShown =
                     _settings.ContributionNoticeShown,
+                ContributionConsentVersion =
+                    _settings.ContributionConsentVersion,
                 ContributionInstallationId =
                     _settings.ContributionInstallationId,
                 PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString(),
@@ -277,6 +287,11 @@ public partial class MainWindow : Window
                 "SettingsSaved",
                 "Application settings were saved.",
                 new { DeletedRecordings = deletedRecordings });
+
+            if (updated.ParticipateInRecognitionImprovement)
+            {
+                _ = SendPendingContributionsAsync(userInitiated: false);
+            }
         }
         catch (Exception exception)
         {
@@ -303,41 +318,54 @@ public partial class MainWindow : Window
             RunVoiceCalibration();
         }
 
-        if (_settings.ContributionNoticeShown)
+        if (_settings.ContributionConsentVersion <
+            CompanionSettings.CurrentContributionConsentVersion)
         {
-            return;
+            ContributionNoticeWindow notice = new(
+                _settings.ParticipateInRecognitionImprovement)
+            {
+                Owner = this
+            };
+
+            bool? noticeResult = notice.ShowDialog();
+
+            if (noticeResult is null)
+            {
+                _settings.ParticipateInRecognitionImprovement = false;
+                RecognitionImprovementCheckBox.IsChecked = false;
+                RefreshContributionOutbox();
+                _contributionRetryTimer.Start();
+                return;
+            }
+
+            _settings.ParticipateInRecognitionImprovement =
+                notice.ParticipationEnabled;
+            _settings.ContributionNoticeShown = true;
+            _settings.ContributionConsentVersion =
+                CompanionSettings.CurrentContributionConsentVersion;
+            RecognitionImprovementCheckBox.IsChecked =
+                notice.ParticipationEnabled;
+
+            try
+            {
+                _settingsService.Save(_settings);
+            }
+            catch (Exception exception)
+            {
+                SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
+                SettingsStatusText.Text =
+                    "Your contribution preference could not be saved. " +
+                    "Choose Save all settings to try again.";
+
+                _logger.Error(
+                    "ContributionPreferenceSaveFailed",
+                    "The first-run contribution preference could not be saved.",
+                    exception);
+            }
         }
 
-        ContributionNoticeWindow notice = new(
-            _settings.ParticipateInRecognitionImprovement)
-        {
-            Owner = this
-        };
-
-        _ = notice.ShowDialog();
-
-        _settings.ParticipateInRecognitionImprovement =
-            notice.ParticipationEnabled;
-        _settings.ContributionNoticeShown = true;
-        RecognitionImprovementCheckBox.IsChecked =
-            notice.ParticipationEnabled;
-
-        try
-        {
-            _settingsService.Save(_settings);
-        }
-        catch (Exception exception)
-        {
-            SettingsStatusText.Foreground = Brushes.DarkGoldenrod;
-            SettingsStatusText.Text =
-                "Your contribution preference could not be saved. " +
-                "Choose Save all settings to try again.";
-
-            _logger.Error(
-                "ContributionPreferenceSaveFailed",
-                "The first-run contribution preference could not be saved.",
-                exception);
-        }
+        _contributionRetryTimer.Start();
+        _ = SendPendingContributionsAsync(userInitiated: false);
     }
 
     private void RunVoiceCalibration_Click(
@@ -1921,6 +1949,11 @@ public partial class MainWindow : Window
                     ? "A sanitized correction was added to the local outbox."
                     : "An identical sanitized correction was already queued.",
                 new { entry.Id });
+
+            if (added)
+            {
+                _ = SendPendingContributionsAsync(userInitiated: false);
+            }
         }
         catch (Exception exception)
         {
@@ -1960,7 +1993,8 @@ public partial class MainWindow : Window
                 _contributionOutbox.Count > 0;
             SendContributionOutboxButton.IsEnabled =
                 _settings.ParticipateInRecognitionImprovement &&
-                _contributionOutbox.Count > 0;
+                _contributionOutbox.Count > 0 &&
+                !_isSendingContributions;
             IReadOnlyList<CorrectionContributionReceipt> sentReceipts =
                 _contributionOutboxService.LoadSent();
             SentContributionSummaryText.Text = sentReceipts.Count == 0
@@ -1974,10 +2008,10 @@ public partial class MainWindow : Window
                       "previously queued item(s) remain local."
                     : _contributionOutbox.Count == 0
                         ? "No pending corrections. New saved corrections " +
-                          "will be queued here automatically."
+                          "will be sent automatically."
                         : $"{_contributionOutbox.Count} sanitized correction(s) " +
                           $"waiting locally; {sentReceipts.Count} sent previously. " +
-                          "Nothing is uploaded automatically.";
+                          "Pending items retry automatically.";
         }
         catch (Exception exception)
         {
@@ -1996,6 +2030,11 @@ public partial class MainWindow : Window
             ContributionOutboxListBox.SelectedItem as
                 CorrectionContributionOutboxItem);
     }
+
+    private async void ContributionRetryTimer_Tick(
+        object? sender,
+        EventArgs e) =>
+        await SendPendingContributionsAsync(userInitiated: false);
 
     private async void SendContributionOutbox_Click(
         object sender,
@@ -2021,8 +2060,30 @@ public partial class MainWindow : Window
             return;
         }
 
+        await SendPendingContributionsAsync(userInitiated: true);
+    }
+
+    private async Task SendPendingContributionsAsync(bool userInitiated)
+    {
+        if (!_settings.ParticipateInRecognitionImprovement ||
+            _isSendingContributions)
+        {
+            return;
+        }
+
+        IReadOnlyList<CorrectionContributionOutboxItem> pending =
+            _contributionOutboxService.Load();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        _isSendingContributions = true;
         SendContributionOutboxButton.IsEnabled = false;
+        DeleteContributionButton.IsEnabled = false;
         int sent = 0;
+        string? completionMessage = null;
+        System.Windows.Media.Brush completionBrush = Brushes.ForestGreen;
 
         try
         {
@@ -2030,8 +2091,7 @@ public partial class MainWindow : Window
             Guid installationId = Guid.Parse(
                 _settings.ContributionInstallationId);
 
-            foreach (CorrectionContributionOutboxItem item in
-                     _contributionOutbox.ToArray())
+            foreach (CorrectionContributionOutboxItem item in pending)
             {
                 CorrectionContributionSendResult result =
                     await _contributionClient.SendAsync(
@@ -2046,10 +2106,9 @@ public partial class MainWindow : Window
                 sent++;
             }
 
-            RefreshContributionOutbox();
-            ContributionOutboxStatusText.Foreground = Brushes.ForestGreen;
-            ContributionOutboxStatusText.Text =
-                $"Sent {sent} sanitized correction(s). No audio was sent.";
+            completionMessage =
+                $"Automatically sent {sent} sanitized correction(s). " +
+                "No audio was sent.";
             _logger.Information(
                 "CorrectionContributionsSent",
                 "Pending sanitized corrections were sent.",
@@ -2062,16 +2121,28 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            RefreshContributionOutbox();
-            ContributionOutboxStatusText.Foreground = Brushes.Firebrick;
-            ContributionOutboxStatusText.Text =
+            completionBrush = userInitiated
+                ? Brushes.Firebrick
+                : Brushes.DarkGoldenrod;
+            completionMessage =
                 $"Sent {sent} correction(s). The remaining items are still " +
-                $"local and can be retried: {exception.Message}";
+                $"local and will retry automatically: {exception.Message}";
             _logger.Error(
                 "CorrectionContributionSendFailed",
                 "One or more sanitized corrections could not be sent.",
                 exception,
-                new { SentCount = sent });
+                new { SentCount = sent, UserInitiated = userInitiated });
+        }
+        finally
+        {
+            _isSendingContributions = false;
+            RefreshContributionOutbox();
+        }
+
+        if (completionMessage is not null)
+        {
+            ContributionOutboxStatusText.Foreground = completionBrush;
+            ContributionOutboxStatusText.Text = completionMessage;
         }
     }
 
@@ -2079,7 +2150,8 @@ public partial class MainWindow : Window
         CorrectionContributionOutboxItem? item)
     {
         ContributionOutboxPreviewTextBox.Text = item?.Json ?? string.Empty;
-        DeleteContributionButton.IsEnabled = item is not null;
+        DeleteContributionButton.IsEnabled =
+            item is not null && !_isSendingContributions;
     }
 
     private void DeleteContribution_Click(object sender, RoutedEventArgs e)
@@ -3068,6 +3140,8 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _contributionRetryTimer.Stop();
+        _contributionRetryTimer.Tick -= ContributionRetryTimer_Tick;
         _lifetimeCancellation.Cancel();
         _contributionClient.Dispose();
         _transcriptionCancellation?.Cancel();

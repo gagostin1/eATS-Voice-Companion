@@ -935,7 +935,7 @@
                                               Content="Participate in recognition improvement"/>
                                     <TextBlock Margin="22,8,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="Enabled by default. Saved corrections are sanitized into the local outbox. Nothing is uploaded until you choose Send pending. Microphone audio is never queued or sent."
+                                               Text="Enabled by default. Saved corrections are sanitized and sent automatically. If offline, they remain in the local outbox and retry later. Microphone audio is never queued or sent."
                                                TextWrapping="Wrap"/>
                                     <Border Margin="0,18,0,0"
                                             Padding="16"
@@ -977,7 +977,7 @@
                                                         Orientation="Horizontal">
                                                 <Button x:Name="SendContributionOutboxButton"
                                                         Click="SendContributionOutbox_Click"
-                                                        Content="Send pending"
+                                                        Content="Retry pending now"
                                                         IsEnabled="False"
                                                         Style="{StaticResource PrimaryButtonStyle}"/>
                                                 <Button Click="RefreshContributionOutbox_Click"

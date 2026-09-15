@@ -26,6 +26,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             AlwaysOnTop = true,
             ParticipateInRecognitionImprovement = false,
             ContributionNoticeShown = true,
+            ContributionConsentVersion = 2,
             ContributionInstallationId =
                 "63bd5c25-0c57-4f5d-8235-dcbf5ee0e44c",
             PushToTalkHotkey = "Ctrl+Shift+F9",
@@ -52,6 +53,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             expected.ContributionNoticeShown,
             actual.ContributionNoticeShown);
         Assert.Equal(
+            expected.ContributionConsentVersion,
+            actual.ContributionConsentVersion);
+        Assert.Equal(
             expected.ContributionInstallationId,
             actual.ContributionInstallationId);
         Assert.Equal(expected.PushToTalkHotkey, actual.PushToTalkHotkey);
@@ -75,6 +79,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.False(result.AlwaysOnTop);
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
+        Assert.Equal(0, result.ContributionConsentVersion);
         Assert.True(Guid.TryParse(
             result.ContributionInstallationId,
             out _));
@@ -105,6 +110,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.True(result.AutomaticallyStageVerifiedCommands);
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
+        Assert.Equal(0, result.ContributionConsentVersion);
     }
 
     public void Dispose()

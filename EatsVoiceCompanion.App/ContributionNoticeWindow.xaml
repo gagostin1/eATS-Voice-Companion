@@ -74,7 +74,7 @@
                       Content="Help improve eATS Voice Companion"/>
             <TextBlock Margin="22,8,0,0"
                        Foreground="#FF64748B"
-                       Text="This is enabled by default. Saved corrections may be sanitized and queued locally for your review, but nothing is uploaded automatically. You can inspect or delete the outbox and change this preference at any time in Settings."
+                       Text="This is enabled by default. When you save a correction, a sanitized report is sent automatically to help improve future releases. Existing pending reports are sent after you continue. Failed sends remain in a local outbox for retry. You can inspect or delete pending reports and turn participation off at any time in Settings."
                        TextWrapping="Wrap"/>
 
             <StackPanel Margin="0,24,0,0"

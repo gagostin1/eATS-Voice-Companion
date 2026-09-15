@@ -7,6 +7,8 @@ public sealed class CompanionSettings
 {
     public const int CurrentVoiceCalibrationVersion = 1;
 
+    public const int CurrentContributionConsentVersion = 2;
+
     public string ControllerPosition { get; set; } = "Atlanta Center";
 
     public string EatsDataDirectory { get; set; } = GetDefaultEatsDataDirectory();
@@ -26,6 +28,8 @@ public sealed class CompanionSettings
     public bool ParticipateInRecognitionImprovement { get; set; } = true;
 
     public bool ContributionNoticeShown { get; set; }
+
+    public int ContributionConsentVersion { get; set; }
 
     public string ContributionInstallationId { get; set; } =
         Guid.NewGuid().ToString("D");
@@ -78,6 +82,13 @@ public sealed class CompanionSettings
             throw new ArgumentOutOfRangeException(
                 nameof(VoiceCalibrationVersion),
                 "The voice-calibration version cannot be negative.");
+        }
+
+        if (ContributionConsentVersion < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ContributionConsentVersion),
+                "The contribution-consent version cannot be negative.");
         }
 
         if (!Guid.TryParse(ContributionInstallationId, out Guid installationId))

@@ -16,10 +16,11 @@ You can attach the JSON to the [speech-recognition issue form](https://github.co
 
 When recognition-improvement participation is enabled, saving a correction
 also places a sanitized schema-v2 case in **Settings > Development feedback**.
-Nothing is sent automatically. Review the JSON and select **Send pending** to
-submit the queued cases to the project. Confirmed submissions move to a local
-sent archive; if the service cannot confirm receipt, the case stays pending so
-it can be retried safely.
+The app sends these cases automatically when participation is enabled.
+Confirmed submissions move to a local sent archive; if the service cannot
+confirm receipt, the case stays pending and retries at startup, after later
+corrections, and periodically while the app is open. You can inspect or delete
+pending JSON and choose **Retry pending now** in Settings.
 
 ## Add a case in a pull request
 
