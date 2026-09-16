@@ -30,7 +30,15 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             ContributionInstallationId =
                 "63bd5c25-0c57-4f5d-8235-dcbf5ee0e44c",
             PushToTalkHotkey = "Ctrl+Shift+F9",
-            VoiceCalibrationVersion = 1
+            VoiceCalibrationVersion = 1,
+            LastUpdateCheckUtc = new DateTimeOffset(
+                2026,
+                9,
+                15,
+                18,
+                30,
+                0,
+                TimeSpan.Zero)
         };
 
         service.Save(expected);
@@ -62,6 +70,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(
             expected.VoiceCalibrationVersion,
             actual.VoiceCalibrationVersion);
+        Assert.Equal(
+            expected.LastUpdateCheckUtc,
+            actual.LastUpdateCheckUtc);
     }
 
     [Fact]
@@ -85,6 +96,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             out _));
         Assert.Null(result.PushToTalkHotkey);
         Assert.Equal(0, result.VoiceCalibrationVersion);
+        Assert.Null(result.LastUpdateCheckUtc);
     }
 
     [Fact]

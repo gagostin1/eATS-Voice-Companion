@@ -6,6 +6,10 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+### Added
+
+- A daily, non-blocking GitHub release check with an in-app update banner and a manual **Check for updates** action; downloads and installation always remain user initiated
+
 ## [0.3.0] - 2026-09-15
 
 ### Added

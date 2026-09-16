@@ -38,6 +38,8 @@ public sealed class CompanionSettings
 
     public int VoiceCalibrationVersion { get; set; }
 
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
     public static string GetDefaultEatsDataDirectory()
     {
         return Path.Combine(

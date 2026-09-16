@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -46,6 +47,7 @@ public partial class MainWindow : Window
     private readonly CorrectionContributionOutboxService
         _contributionOutboxService;
     private readonly CorrectionContributionClient _contributionClient;
+    private readonly GitHubReleaseUpdateService _updateService;
     private readonly DispatcherTimer _contributionRetryTimer;
     private readonly LocalCorrectionMemoryService _correctionMemoryService;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
@@ -95,6 +97,8 @@ public partial class MainWindow : Window
     private double _fullWindowTop;
     private WindowState _fullWindowState = WindowState.Normal;
     private bool _isSendingContributions;
+    private bool _isCheckingForUpdates;
+    private Uri? _availableUpdateUri;
 
     public MainWindow()
     {
@@ -116,6 +120,7 @@ public partial class MainWindow : Window
             new CorrectionContributionOutboxService(
                 _correctionHistoryService);
         _contributionClient = new CorrectionContributionClient();
+        _updateService = new GitHubReleaseUpdateService();
         _contributionRetryTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMinutes(15)
@@ -197,6 +202,7 @@ public partial class MainWindow : Window
         Topmost = _settings.AlwaysOnTop;
         RecognitionImprovementCheckBox.IsChecked =
             _settings.ParticipateInRecognitionImprovement;
+        AppVersionText.Text = $"Installed version {GetAppVersion()}";
         PushToTalkHotkeyDefinition.TryParse(
             _settings.PushToTalkHotkey,
             out _pendingPushToTalkHotkey);
@@ -255,7 +261,8 @@ public partial class MainWindow : Window
                     _settings.ContributionInstallationId,
                 PushToTalkHotkey = _pendingPushToTalkHotkey?.ToString(),
                 VoiceCalibrationVersion =
-                    _settings.VoiceCalibrationVersion
+                    _settings.VoiceCalibrationVersion,
+                LastUpdateCheckUtc = _settings.LastUpdateCheckUtc
             };
 
             _settingsService.Save(updated);
@@ -366,6 +373,152 @@ public partial class MainWindow : Window
 
         _contributionRetryTimer.Start();
         _ = SendPendingContributionsAsync(userInitiated: false);
+        _ = CheckForUpdatesAsync(userInitiated: false);
+    }
+
+    private async void CheckForUpdates_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await CheckForUpdatesAsync(userInitiated: true);
+    }
+
+    private async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (_isCheckingForUpdates)
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (!userInitiated &&
+            !GitHubReleaseUpdateService.ShouldCheckAutomatically(
+                _settings.LastUpdateCheckUtc,
+                now))
+        {
+            return;
+        }
+
+        _isCheckingForUpdates = true;
+        CheckForUpdatesButton.IsEnabled = false;
+        if (userInitiated)
+        {
+            UpdateCheckStatusText.Foreground = Brushes.DimGray;
+            UpdateCheckStatusText.Text = "Checking GitHub for updates...";
+        }
+
+        _settings.LastUpdateCheckUtc = now;
+        TrySaveUpdateCheckTimestamp();
+
+        try
+        {
+            Version currentVersion =
+                typeof(MainWindow).Assembly.GetName().Version ??
+                new Version(0, 0, 0, 0);
+            AppUpdateCheckResult result = await _updateService.CheckAsync(
+                currentVersion,
+                _lifetimeCancellation.Token);
+
+            if (result.IsUpdateAvailable)
+            {
+                _availableUpdateUri = result.ReleasePageUri;
+                UpdateBannerText.Text =
+                    $"{result.LatestTag} is available. Review the release " +
+                    "notes and download the installer when you're ready.";
+                UpdateBanner.Visibility = Visibility.Visible;
+                UpdateCheckStatusText.Foreground = Brushes.DarkBlue;
+                UpdateCheckStatusText.Text =
+                    $"Update {result.LatestTag} is available.";
+
+                _logger.Information(
+                    "ApplicationUpdateAvailable",
+                    "A newer application release is available.",
+                    new { result.LatestTag });
+            }
+            else if (userInitiated)
+            {
+                UpdateCheckStatusText.Foreground = Brushes.ForestGreen;
+                UpdateCheckStatusText.Text =
+                    $"You're up to date on version {GetAppVersion()}.";
+            }
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // Application shutdown cancels background update checks.
+        }
+        catch (Exception exception)
+        {
+            _logger.Warning(
+                "ApplicationUpdateCheckFailed",
+                "The application update check did not complete.",
+                new { Exception = exception.Message });
+
+            if (userInitiated)
+            {
+                UpdateCheckStatusText.Foreground = Brushes.DarkGoldenrod;
+                UpdateCheckStatusText.Text =
+                    "Updates could not be checked right now. The rest of " +
+                    "the app remains available.";
+            }
+        }
+        finally
+        {
+            _isCheckingForUpdates = false;
+            CheckForUpdatesButton.IsEnabled = true;
+        }
+    }
+
+    private void TrySaveUpdateCheckTimestamp()
+    {
+        try
+        {
+            _settingsService.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            _logger.Warning(
+                "UpdateCheckTimestampSaveFailed",
+                "The update-check timestamp could not be saved.",
+                new { Exception = exception.Message });
+        }
+    }
+
+    private void OpenUpdateRelease_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_availableUpdateUri is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _availableUpdateUri.AbsoluteUri,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception)
+        {
+            UpdateCheckStatusText.Foreground = Brushes.Firebrick;
+            UpdateCheckStatusText.Text =
+                "The release page could not be opened. Visit the project's " +
+                "GitHub Releases page manually.";
+            _logger.Error(
+                "UpdateReleasePageOpenFailed",
+                "The release page could not be opened.",
+                exception);
+        }
+    }
+
+    private void DismissUpdateBanner_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        UpdateBanner.Visibility = Visibility.Collapsed;
     }
 
     private void RunVoiceCalibration_Click(
@@ -3144,6 +3297,7 @@ public partial class MainWindow : Window
         _contributionRetryTimer.Tick -= ContributionRetryTimer_Tick;
         _lifetimeCancellation.Cancel();
         _contributionClient.Dispose();
+        _updateService.Dispose();
         _transcriptionCancellation?.Cancel();
 
         _audioRecorder.RecordingCompleted -=
