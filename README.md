@@ -2,7 +2,7 @@
 
 <img src="assets/eats-voice-companion-logo.png" alt="eATS Voice Companion radar and microphone logo" width="160">
 
-eATS Voice Companion is an independent Windows app that turns spoken ATC instructions into commands for the eATS enroute simulator. Recognition runs locally, commands are checked against available simulator context, and valid results are staged for review.
+eATS Voice Companion is an independent Windows app that turns spoken ATC instructions into commands for the eATS enroute simulator. Recognition runs locally, commands are checked against available simulator context, and voice results can be submitted automatically.
 
 Created and maintained by **Gus Agostinho**.
 
@@ -11,7 +11,7 @@ Created and maintained by **Gus Agostinho**.
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
 
 > [!IMPORTANT]
-> This project is a public beta. Review the staged command before pressing Enter in eATS. The app never presses the final Enter key for you.
+> This project is a public beta. Voice commands are submitted automatically by default, including best-effort results that may be wrong. Turn off **Press Enter automatically for voice commands** in Settings if you want to review them before submitting. Manual command generation remains stage-only.
 
 ## What it does
 
@@ -26,7 +26,7 @@ Created and maintained by **Gus Agostinho**.
 - Offers immediate **Looks right** / **Fix this** feedback and keeps a private local correction history whose reviewed corrections guide future prompts and route-safe fix recovery, with replay and sanitized regression-case export
 - Automatically sends deduplicated, sanitized v2 regression cases after opted-in corrections; offline failures remain in a local outbox that can be inspected, deleted, exported, or retried from Settings
 - Validates generated tokens and checks callsigns against the current eATS snapshot
-- Automatically stages the best command in eATS while leaving transmission to the controller
+- Automatically enters and submits the best voice command in eATS by default; manual commands remain staged for review
 
 Supported groups include headings, altitude and speed assignments, direct-to and route instructions, STAR/descent commands, crossing restrictions, transponder commands, reports, acknowledgements, and related combinations. See the [command catalog](docs/COMMAND_CATALOG.md) for exact phraseology and tokens.
 
@@ -37,7 +37,7 @@ Requires Windows 11 (x64), eATS, a microphone, the Microsoft Visual C++ 2022 Red
 1. Download and run `EatsVoiceCompanion-Setup-win-x64.exe` from the [latest release](https://github.com/gagostin1/eATS-Voice-Companion/releases/latest). The installer adds a Start Menu shortcut and can optionally add a desktop shortcut.
 2. Complete the first-run microphone, push-to-talk, and local voice calibration wizard. eATS does not need to be open for this step.
 3. Open **Settings**, confirm the eATS data directory, select **Detect eATS**, then **Save all settings**.
-4. Hold push-to-talk, speak, release, and review the staged command in eATS before pressing Enter.
+4. Hold push-to-talk, speak, and release. The resulting voice command is submitted in eATS automatically by default. Disable automatic Enter in Settings to review it first.
 
 For a no-install copy, download `EatsVoiceCompanion-win-x64.zip`, extract the entire archive to a normal folder, and run `EatsVoiceCompanion.App.exe`.
 
@@ -47,10 +47,10 @@ The installer is not yet code-signed, so Windows SmartScreen may display an unkn
 
 ## Important behavior
 
-- Every non-empty recording with active-aircraft context attempts to produce a best-effort command and, when automatic staging is enabled, stage it.
+- Every non-empty recording with active-aircraft context attempts to produce a best-effort command and, when automation is enabled, submit it.
 - A verified callsign or STAR means it matched available eATS context—not that speech recognition was certainly correct.
 - Best-effort results can be wrong, particularly with unclear audio, ambiguous callsigns, or unsupported phraseology.
-- eATS remains the source of truth. Always inspect the radio-command field before transmitting.
+- Recognition and simulator-context checks cannot guarantee that a spoken instruction was understood correctly. Review the result in eATS and use the manual-review setting when appropriate.
 
 Read [Safety and limitations](docs/SAFETY_AND_LIMITATIONS.md) for the detailed operating model and current constraints.
 

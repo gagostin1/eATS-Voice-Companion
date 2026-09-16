@@ -36,6 +36,67 @@ public sealed class EatsCommandStagerTests
     }
 
     [Fact]
+    public async Task StageAndSubmitAsync_TypesThenPressesFinalEnter()
+    {
+        FakeWindowInput input = new();
+        EatsCommandStager stager = CreateStager(input);
+
+        await stager.StageAndSubmitAsync(Process, "aal123 fh270");
+
+        Assert.Equal("Text:AAL123 FH270", input.Calls[^3]);
+        Assert.Equal("Foreground", input.Calls[^2]);
+        Assert.Equal("Enter", input.Calls[^1]);
+        Assert.Equal(1, input.Calls.Count(call => call == "Enter"));
+    }
+
+    [Fact]
+    public async Task StageAndSubmitAsync_FallbackFocusStillSubmitsAfterTyping()
+    {
+        FakeWindowInput input = new()
+        {
+            RadioFocusSucceeds = false
+        };
+        EatsCommandStager stager = CreateStager(input);
+
+        await stager.StageAndSubmitAsync(Process, "AAL123 FH270");
+
+        Assert.Equal(2, input.Calls.Count(call => call == "Enter"));
+        Assert.Equal("Text:AAL123 FH270", input.Calls[^3]);
+        Assert.Equal("Enter", input.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task StageAndSubmitAsync_DoesNotSubmitIfFocusIsLostAfterTyping()
+    {
+        FakeWindowInput input = new()
+        {
+            SuccessfulForegroundChecks = 3
+        };
+        EatsCommandStager stager = CreateStager(input);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => stager.StageAndSubmitAsync(Process, "AAL123 FH270"));
+
+        Assert.Contains("Text:AAL123 FH270", input.Calls);
+        Assert.DoesNotContain("Enter", input.Calls);
+    }
+
+    [Fact]
+    public async Task StageAndSubmitAsync_DoesNotSubmitIfTypingFails()
+    {
+        FakeWindowInput input = new()
+        {
+            TextFailure = true
+        };
+        EatsCommandStager stager = CreateStager(input);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => stager.StageAndSubmitAsync(Process, "AAL123 FH270"));
+
+        Assert.DoesNotContain("Enter", input.Calls);
+    }
+
+    [Fact]
     public async Task StageAsync_RejectsInvalidTransmissionBeforeWindowInput()
     {
         FakeWindowInput input = new();
@@ -152,6 +213,8 @@ public sealed class EatsCommandStagerTests
 
         public bool RadioFocusSucceeds { get; init; } = true;
 
+        public bool TextFailure { get; init; }
+
         public bool IsWindowOwnedByProcess(
             nint windowHandle,
             int processId)
@@ -196,6 +259,10 @@ public sealed class EatsCommandStagerTests
         public void SendText(string text)
         {
             Calls.Add("Text:" + text);
+            if (TextFailure)
+            {
+                throw new InvalidOperationException("Typing failed.");
+            }
         }
     }
 }

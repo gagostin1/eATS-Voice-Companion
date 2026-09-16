@@ -149,7 +149,7 @@
                                Text="eATS Voice Companion"/>
                     <TextBlock Margin="0,5,0,0"
                                Foreground="#FF94A3B8"
-                               Text="Speak naturally. Verified commands stage automatically; transmission remains yours."/>
+                               Text="Speak naturally. Voice commands can be submitted automatically to eATS."/>
                     <TextBlock Margin="0,4,0,0"
                                Foreground="#FF60A5FA"
                                FontSize="12"
@@ -173,7 +173,7 @@
                                      VerticalAlignment="Center" Fill="#FF60A5FA"/>
                             <TextBlock Foreground="#FFDBEAFE"
                                        FontWeight="SemiBold"
-                                       Text="LOCAL + STAGE ONLY"/>
+                                       Text="LOCAL VOICE CONTROL"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -231,7 +231,7 @@
                                     <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Talk to eATS"/>
                                     <TextBlock Margin="0,7,0,18"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="Hold while speaking, then release. The app transcribes, verifies, and stages the command automatically."
+                                               Text="Hold while speaking, then release. The app transcribes and sends the command to eATS automatically when enabled."
                                                TextWrapping="Wrap"/>
                                     <TextBlock x:Name="VoiceHotkeyHintText"
                                                Margin="0,0,0,10"
@@ -279,9 +279,9 @@
                                         <TextBlock Margin="0,6,0,0" Foreground="#FF1E3A8A"
                                                    FontWeight="SemiBold" Text="2  Verify automatically"/>
                                         <TextBlock Margin="0,6,0,0" Foreground="#FF1E3A8A"
-                                                   FontWeight="SemiBold" Text="3  Review in eATS"/>
+                                                   FontWeight="SemiBold" Text="3  Enter in eATS"/>
                                         <TextBlock Margin="0,6,0,0" Foreground="#FF1E3A8A"
-                                                   FontWeight="SemiBold" Text="4  You press Enter"/>
+                                                   FontWeight="SemiBold" Text="4  Submit automatically"/>
                                     </StackPanel>
                                 </Border>
                             </Grid>
@@ -342,7 +342,7 @@
                                     <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Latest command"/>
                                     <TextBlock Margin="0,5,0,14"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="The final Enter key is never pressed automatically."
+                                               Text="Voice commands are submitted automatically when enabled in Settings. Manual commands stay staged for review."
                                                TextWrapping="Wrap"/>
                                     <Border MinHeight="98" Padding="16"
                                             Background="#FF0B1220" CornerRadius="9">
@@ -868,10 +868,19 @@
                                     <CheckBox x:Name="AutoStageCommandsCheckBox"
                                               VerticalContentAlignment="Center"
                                               FontWeight="SemiBold"
-                                              Content="Automatically stage verified commands"/>
+                                              Content="Automatically enter commands in eATS"/>
                                     <TextBlock Margin="22,8,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="The command is typed into the eATS radio field after verification. The final Enter key is always left to you."
+                                               Text="Voice commands are best-effort when recognition is uncertain; manual commands require fresh verification."
+                                               TextWrapping="Wrap"/>
+                                    <CheckBox x:Name="AutoSubmitVoiceCommandsCheckBox"
+                                              Margin="0,20,0,0"
+                                              VerticalContentAlignment="Center"
+                                              FontWeight="SemiBold"
+                                              Content="Press Enter automatically for voice commands"/>
+                                    <TextBlock Margin="22,8,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="After a voice command is entered and eATS still has focus, the app submits it. Turn this off to review and press Enter yourself. Manual command generation always stages only."
                                                TextWrapping="Wrap"/>
                                     <CheckBox x:Name="AlwaysOnTopCheckBox"
                                               Margin="0,20,0,0"

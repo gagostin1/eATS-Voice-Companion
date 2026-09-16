@@ -23,6 +23,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             MaximumSavedRecordings = 50,
             PreferredMicrophoneName = "Test microphone",
             AutomaticallyStageVerifiedCommands = false,
+            AutomaticallySubmitVoiceCommands = false,
             AlwaysOnTop = true,
             ParticipateInRecognitionImprovement = false,
             ContributionNoticeShown = true,
@@ -53,6 +54,9 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(
             expected.AutomaticallyStageVerifiedCommands,
             actual.AutomaticallyStageVerifiedCommands);
+        Assert.Equal(
+            expected.AutomaticallySubmitVoiceCommands,
+            actual.AutomaticallySubmitVoiceCommands);
         Assert.Equal(expected.AlwaysOnTop, actual.AlwaysOnTop);
         Assert.Equal(
             expected.ParticipateInRecognitionImprovement,
@@ -87,6 +91,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
         Assert.Equal(7, result.RecordingRetentionDays);
         Assert.Equal(100, result.MaximumSavedRecordings);
         Assert.True(result.AutomaticallyStageVerifiedCommands);
+        Assert.True(result.AutomaticallySubmitVoiceCommands);
         Assert.False(result.AlwaysOnTop);
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
@@ -120,6 +125,7 @@ public sealed class CompanionSettingsServiceTests : IDisposable
             new CompanionSettingsService(path).Load();
 
         Assert.True(result.AutomaticallyStageVerifiedCommands);
+        Assert.True(result.AutomaticallySubmitVoiceCommands);
         Assert.True(result.ParticipateInRecognitionImprovement);
         Assert.False(result.ContributionNoticeShown);
         Assert.Equal(0, result.ContributionConsentVersion);

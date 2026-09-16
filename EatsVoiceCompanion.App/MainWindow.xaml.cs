@@ -198,6 +198,8 @@ public partial class MainWindow : Window
             _settings.MaximumSavedRecordings.ToString();
         AutoStageCommandsCheckBox.IsChecked =
             _settings.AutomaticallyStageVerifiedCommands;
+        AutoSubmitVoiceCommandsCheckBox.IsChecked =
+            _settings.AutomaticallySubmitVoiceCommands;
         AlwaysOnTopCheckBox.IsChecked = _settings.AlwaysOnTop;
         Topmost = _settings.AlwaysOnTop;
         RecognitionImprovementCheckBox.IsChecked =
@@ -250,6 +252,8 @@ public partial class MainWindow : Window
                     (MicrophoneComboBox.SelectedItem as AudioInputDevice)?.Name,
                 AutomaticallyStageVerifiedCommands =
                     AutoStageCommandsCheckBox.IsChecked == true,
+                AutomaticallySubmitVoiceCommands =
+                    AutoSubmitVoiceCommandsCheckBox.IsChecked == true,
                 AlwaysOnTop = AlwaysOnTopCheckBox.IsChecked == true,
                 ParticipateInRecognitionImprovement =
                     RecognitionImprovementCheckBox.IsChecked == true,
@@ -898,6 +902,8 @@ public partial class MainWindow : Window
                 source,
                 "voice recognition",
                 StringComparison.Ordinal);
+            bool submitVoiceCommand = forceBestEffortVoiceStage &&
+                _settings.AutomaticallySubmitVoiceCommands;
 
             if (_currentSafetyState != CommandSafetyState.Verified &&
                 !forceBestEffortVoiceStage)
@@ -925,29 +931,47 @@ public partial class MainWindow : Window
             CommandStageStatusText.Foreground = Brushes.DarkGoldenrod;
             CommandStageStatusText.Text = forceBestEffortVoiceStage &&
                 _currentSafetyState != CommandSafetyState.Verified
-                ? "Best-effort voice command ready. Staging it in eATS..."
-                : "Verified command ready. Staging it in eATS...";
+                ? "Best-effort voice command ready. Sending it to eATS..."
+                : submitVoiceCommand
+                    ? "Voice command ready. Sending it to eATS..."
+                    : "Verified command ready. Staging it in eATS...";
 
-            await _commandStager.StageAsync(
-                process,
-                transmission,
-                _lifetimeCancellation.Token);
+            if (submitVoiceCommand)
+            {
+                await _commandStager.StageAndSubmitAsync(
+                    process,
+                    transmission,
+                    _lifetimeCancellation.Token);
+            }
+            else
+            {
+                await _commandStager.StageAsync(
+                    process,
+                    transmission,
+                    _lifetimeCancellation.Token);
+            }
 
             _currentPreviewWasStaged = true;
             CommandStageStatusText.Foreground = Brushes.ForestGreen;
-            CommandStageStatusText.Text =
-                (_currentPreviewWasRecovered
+            CommandStageStatusText.Text = submitVoiceCommand
+                ? (_currentPreviewWasRecovered
+                    ? "Best-effort command submitted in eATS. Check the result."
+                    : "Voice command submitted in eATS.")
+                : (_currentPreviewWasRecovered
                     ? "Best-effort command staged. Review in eATS, then "
                     : "Command staged. Review in eATS, then ") +
-                "press Enter to transmit.";
+                  "press Enter to transmit.";
 
             _logger.Information(
-                "CommandStaged",
-                "A command was staged without transmission.",
+                submitVoiceCommand ? "CommandSubmitted" : "CommandStaged",
+                submitVoiceCommand
+                    ? "A voice command was entered and submitted in eATS."
+                    : "A command was staged without transmission.",
                 new
                 {
                     process.ProcessId,
                     Source = source,
+                    Submitted = submitVoiceCommand,
                     DurationMs = stagingStopwatch.Elapsed.TotalMilliseconds
                 });
         }
@@ -961,10 +985,10 @@ public partial class MainWindow : Window
             _currentPreviewWasStaged = true;
             CommandStageStatusText.Foreground = Brushes.Firebrick;
             CommandStageStatusText.Text =
-                "Command staging did not complete: " +
+                "Command entry or submission did not complete: " +
                 exception.Message +
-                " Check and clear the eATS radio-command box before " +
-                "trying again.";
+                " Check eATS before trying again; the command may have " +
+                "been entered or submitted.";
 
             _logger.Error(
                 "CommandStagingFailed",
@@ -3249,8 +3273,11 @@ public partial class MainWindow : Window
         CommandStageStatusText.Foreground = Brushes.DimGray;
         CommandStageStatusText.Text =
             _settings.AutomaticallyStageVerifiedCommands
-                ? "A freshly verified command will be staged automatically. " +
-                  "The final Enter key is always left to you."
+                ? _settings.AutomaticallySubmitVoiceCommands
+                    ? "Voice commands will be entered and submitted automatically. " +
+                      "Manual commands are staged for review."
+                    : "Commands will be staged automatically. " +
+                      "The final Enter key is left to you."
                 : "Automatic staging is off in Settings.";
     }
 

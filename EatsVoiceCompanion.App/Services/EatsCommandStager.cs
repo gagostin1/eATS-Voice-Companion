@@ -49,6 +49,31 @@ public sealed class EatsCommandStager
         string transmission,
         CancellationToken cancellationToken = default)
     {
+        await StageCoreAsync(
+            process,
+            transmission,
+            submit: false,
+            cancellationToken);
+    }
+
+    public async Task StageAndSubmitAsync(
+        EatsProcessInfo process,
+        string transmission,
+        CancellationToken cancellationToken = default)
+    {
+        await StageCoreAsync(
+            process,
+            transmission,
+            submit: true,
+            cancellationToken);
+    }
+
+    private async Task StageCoreAsync(
+        EatsProcessInfo process,
+        string transmission,
+        bool submit,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(process);
 
         string validated = EatsTransmissionValidator.Validate(transmission);
@@ -94,6 +119,15 @@ public sealed class EatsCommandStager
         await WaitForInputAsync(cancellationToken);
         EnsureForeground(process.MainWindowHandle);
         _windowInput.SendText(validated);
+
+        if (submit)
+        {
+            // Let eATS process the text input before submitting it. Never
+            // send the final Enter if typing failed or eATS lost focus.
+            await WaitForInputAsync(cancellationToken);
+            EnsureForeground(process.MainWindowHandle);
+            _windowInput.SendEnter();
+        }
     }
 
     private Task WaitForInputAsync(CancellationToken cancellationToken)
