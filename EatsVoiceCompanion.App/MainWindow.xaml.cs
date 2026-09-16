@@ -318,6 +318,7 @@ public partial class MainWindow : Window
         RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
+        _ = WarmSpeechRecognitionAsync();
 
         if (_settings.VoiceCalibrationVersion <
             CompanionSettings.CurrentVoiceCalibrationVersion)
@@ -374,6 +375,28 @@ public partial class MainWindow : Window
         _contributionRetryTimer.Start();
         _ = SendPendingContributionsAsync(userInitiated: false);
         _ = CheckForUpdatesAsync(userInitiated: false);
+    }
+
+    private async Task WarmSpeechRecognitionAsync()
+    {
+        try
+        {
+            await _speechRecognitionService.WarmUpAsync(
+                _lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException)
+            when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // Application shutdown intentionally cancels background warm-up.
+        }
+        catch (Exception exception)
+        {
+            // Warm-up is an optimization. Normal first-use initialization can
+            // still retry if background loading was unsuccessful.
+            _logger.Warning(
+                "SpeechModelWarmUpFailed",
+                $"The speech model could not be warmed in the background: {exception.Message}");
+        }
     }
 
     private async void CheckForUpdates_Click(
@@ -846,6 +869,8 @@ public partial class MainWindow : Window
 
     private async Task TryAutoStageCurrentCommandAsync(string source)
     {
+        Stopwatch stagingStopwatch = Stopwatch.StartNew();
+
         if (!_settings.AutomaticallyStageVerifiedCommands)
         {
             CommandStageStatusText.Foreground = Brushes.DimGray;
@@ -919,7 +944,12 @@ public partial class MainWindow : Window
             _logger.Information(
                 "CommandStaged",
                 "A command was staged without transmission.",
-                new { process.ProcessId, Source = source });
+                new
+                {
+                    process.ProcessId,
+                    Source = source,
+                    DurationMs = stagingStopwatch.Elapsed.TotalMilliseconds
+                });
         }
         catch (OperationCanceledException)
             when (_lifetimeCancellation.IsCancellationRequested)
@@ -939,7 +969,12 @@ public partial class MainWindow : Window
             _logger.Error(
                 "CommandStagingFailed",
                 "A command could not be staged.",
-                exception);
+                exception,
+                new
+                {
+                    Source = source,
+                    DurationMs = stagingStopwatch.Elapsed.TotalMilliseconds
+                });
         }
         finally
         {
@@ -1511,6 +1546,9 @@ public partial class MainWindow : Window
         object? sender,
         AudioRecordingCompletedEventArgs e)
     {
+        Stopwatch processingStopwatch = Stopwatch.StartNew();
+        double audioQualityMs = 0;
+
         if (_lifetimeCancellation.IsCancellationRequested)
         {
             return;
@@ -1548,6 +1586,7 @@ public partial class MainWindow : Window
             audioQuality = await Task.Run(
                 () => _audioQualityAnalyzer.Analyze(e.FilePath),
                 _lifetimeCancellation.Token);
+            audioQualityMs = processingStopwatch.Elapsed.TotalMilliseconds;
             await Dispatcher.InvokeAsync(() =>
             {
                 RecordingLevelBar.Value = 0;
@@ -1672,6 +1711,8 @@ public partial class MainWindow : Window
                 BuildVoicePreview(
                     transcript,
                     refreshRecognitionContext: false);
+                SpeechStatusText.Text +=
+                    $" Ready in {processingStopwatch.Elapsed.TotalSeconds:0.00}s.";
                 SaveVoiceAttemptToHistory(
                     e.FilePath,
                     transcript,
@@ -1682,7 +1723,17 @@ public partial class MainWindow : Window
             _logger.Information(
                 "TranscriptionCompleted",
                 "Local speech transcription completed.",
-                new { HasTranscript = !string.IsNullOrWhiteSpace(transcript) });
+                new
+                {
+                    HasTranscript = !string.IsNullOrWhiteSpace(transcript),
+                    AudioQualityMs = audioQualityMs,
+                    workflow.Timings.ContextBeforeMs,
+                    workflow.Timings.TranscriptionMs,
+                    workflow.Timings.ContextAfterMs,
+                    WorkflowTotalMs = workflow.Timings.TotalMs,
+                    ReadyForStagingMs =
+                        processingStopwatch.Elapsed.TotalMilliseconds
+                });
         }
         catch (OperationCanceledException)
             when (cancellation.IsCancellationRequested)
@@ -3309,6 +3360,7 @@ public partial class MainWindow : Window
         }
 
         _audioRecorder.Dispose();
+        _speechRecognitionService.Dispose();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using Whisper.net;
@@ -14,7 +15,7 @@ public interface ISpeechRecognitionService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class SpeechRecognitionService : ISpeechRecognitionService
+public sealed class SpeechRecognitionService : ISpeechRecognitionService, IDisposable
 {
     private const string ModelFileName = "ggml-small.en.bin";
     private const long ExpectedModelFileSizeBytes = 487_614_201;
@@ -49,8 +50,13 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     "Say again.";
 
     private readonly AppLogger? _logger;
+    private readonly SemaphoreSlim _factoryLock = new(1, 1);
+    private readonly SemaphoreSlim _transcriptionLock = new(1, 1);
+    private WhisperFactory? _whisperFactory;
+    private DateTime _factoryModelLastWriteTimeUtc;
     private bool _modelValidated;
     private DateTime _validatedLastWriteTimeUtc;
+    private bool _disposed;
 
     public SpeechRecognitionService(
         string? modelPath = null,
@@ -67,6 +73,47 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
     }
 
     public string ModelPath { get; }
+
+    public async Task WarmUpAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Preserve the existing first-use download behavior. If the model has
+        // already been installed, load it while the user is setting up the app
+        // instead of waiting until PTT is released.
+        if (!File.Exists(ModelPath))
+        {
+            _logger?.Information(
+                "SpeechModelWarmUpSkipped",
+                "Background speech-model warm-up was skipped because the model has not been downloaded yet.");
+            return;
+        }
+
+        await _transcriptionLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            await EnsureModelAsync(cancellationToken: cancellationToken);
+            (_, bool wasAlreadyLoaded) =
+                await GetOrCreateFactoryAsync(cancellationToken);
+
+            _logger?.Information(
+                "SpeechModelWarmUpCompleted",
+                "The local speech model is ready in memory.",
+                new
+                {
+                    DurationMs = stopwatch.Elapsed.TotalMilliseconds,
+                    WasAlreadyLoaded = wasAlreadyLoaded
+                });
+        }
+        finally
+        {
+            _transcriptionLock.Release();
+        }
+    }
 
     public async Task EnsureModelAsync(
         IProgress<string>? progress = null,
@@ -197,50 +244,151 @@ public sealed class SpeechRecognitionService : ISpeechRecognitionService
                 wavFilePath);
         }
 
-        await EnsureModelAsync(
-            progress,
-            cancellationToken);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _transcriptionLock.WaitAsync(cancellationToken);
 
-        progress?.Report("Transcribing recording locally...");
-
-        using var whisperFactory =
-            WhisperFactory.FromPath(ModelPath);
-
-        string completePrompt = RecognitionPrompt;
-
-        if (!string.IsNullOrWhiteSpace(additionalPrompt))
+        try
         {
-            completePrompt += " " + additionalPrompt;
-        }
+            Stopwatch totalStopwatch = Stopwatch.StartNew();
+            Stopwatch stageStopwatch = Stopwatch.StartNew();
 
-        await using var processor =
-            whisperFactory.CreateBuilder()
-                .WithLanguage("en")
-                .WithPrompt(completePrompt)
-                .WithSingleSegment()
-                .WithBeamSearchSamplingStrategy(
-                    strategy => strategy.WithBeamSize(5))
-                .Build();
+            await EnsureModelAsync(
+                progress,
+                cancellationToken);
+            double modelValidationMs =
+                stageStopwatch.Elapsed.TotalMilliseconds;
 
-        await using FileStream audioStream =
-            File.OpenRead(wavFilePath);
+            stageStopwatch.Restart();
+            (WhisperFactory whisperFactory, bool wasAlreadyLoaded) =
+                await GetOrCreateFactoryAsync(cancellationToken);
+            double factoryAcquisitionMs =
+                stageStopwatch.Elapsed.TotalMilliseconds;
 
-        StringBuilder transcript = new();
+            progress?.Report("Transcribing recording locally...");
 
-        await foreach (
-            var segment in processor
-                .ProcessAsync(audioStream, cancellationToken))
-        {
-            string text = segment.Text.Trim();
+            string completePrompt = RecognitionPrompt;
 
-            if (text.Length > 0)
+            if (!string.IsNullOrWhiteSpace(additionalPrompt))
             {
-                transcript.Append(text);
-                transcript.Append(' ');
+                completePrompt += " " + additionalPrompt;
+            }
+
+            stageStopwatch.Restart();
+            await using var processor =
+                whisperFactory.CreateBuilder()
+                    .WithLanguage("en")
+                    .WithPrompt(completePrompt)
+                    .WithSingleSegment()
+                    .WithBeamSearchSamplingStrategy(
+                        strategy => strategy.WithBeamSize(5))
+                    .Build();
+            double processorCreationMs =
+                stageStopwatch.Elapsed.TotalMilliseconds;
+
+            await using FileStream audioStream =
+                File.OpenRead(wavFilePath);
+
+            StringBuilder transcript = new();
+            stageStopwatch.Restart();
+
+            await foreach (
+                var segment in processor
+                    .ProcessAsync(audioStream, cancellationToken))
+            {
+                string text = segment.Text.Trim();
+
+                if (text.Length > 0)
+                {
+                    transcript.Append(text);
+                    transcript.Append(' ');
+                }
+            }
+
+            double decodingMs = stageStopwatch.Elapsed.TotalMilliseconds;
+            string result = transcript.ToString().Trim();
+
+            _logger?.Information(
+                "SpeechRecognitionTiming",
+                "Local speech recognition completed.",
+                new
+                {
+                    TotalMs = totalStopwatch.Elapsed.TotalMilliseconds,
+                    ModelValidationMs = modelValidationMs,
+                    FactoryAcquisitionMs = factoryAcquisitionMs,
+                    ProcessorCreationMs = processorCreationMs,
+                    DecodingMs = decodingMs,
+                    WasModelAlreadyLoaded = wasAlreadyLoaded,
+                    PromptCharacters = completePrompt.Length,
+                    HasTranscript = result.Length > 0
+                });
+
+            return result;
+        }
+        finally
+        {
+            _transcriptionLock.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        _transcriptionLock.Wait();
+
+        try
+        {
+            _factoryLock.Wait();
+
+            try
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _whisperFactory?.Dispose();
+                _whisperFactory = null;
+            }
+            finally
+            {
+                _factoryLock.Release();
             }
         }
+        finally
+        {
+            _transcriptionLock.Release();
+        }
+    }
 
-        return transcript.ToString().Trim();
+    private async Task<(WhisperFactory Factory, bool WasAlreadyLoaded)>
+        GetOrCreateFactoryAsync(CancellationToken cancellationToken)
+    {
+        await _factoryLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            DateTime modelLastWriteTimeUtc =
+                File.GetLastWriteTimeUtc(ModelPath);
+
+            if (_whisperFactory is not null &&
+                _factoryModelLastWriteTimeUtc == modelLastWriteTimeUtc)
+            {
+                return (_whisperFactory, true);
+            }
+
+            _whisperFactory?.Dispose();
+            _whisperFactory = await Task.Run(
+                () => WhisperFactory.FromPath(ModelPath),
+                cancellationToken);
+            _factoryModelLastWriteTimeUtc = modelLastWriteTimeUtc;
+
+            return (_whisperFactory, false);
+        }
+        finally
+        {
+            _factoryLock.Release();
+        }
     }
 
     private async Task<bool> IsValidModelFileAsync(

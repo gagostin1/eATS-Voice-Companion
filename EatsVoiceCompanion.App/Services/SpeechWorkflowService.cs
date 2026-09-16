@@ -1,9 +1,18 @@
+using System.Diagnostics;
+
 namespace EatsVoiceCompanion.App.Services;
+
+public sealed record SpeechWorkflowTimings(
+    double ContextBeforeMs,
+    double TranscriptionMs,
+    double ContextAfterMs,
+    double TotalMs);
 
 public sealed record SpeechWorkflowResult(
     string Transcript,
     RecognitionContextResult ContextBeforeTranscription,
-    RecognitionContextResult ContextAfterTranscription);
+    RecognitionContextResult ContextAfterTranscription,
+    SpeechWorkflowTimings Timings);
 
 public sealed class SpeechWorkflowService
 {
@@ -31,32 +40,44 @@ public sealed class SpeechWorkflowService
         IProgress<RecognitionContextResult>? contextProgress = null,
         CancellationToken cancellationToken = default)
     {
+        Stopwatch totalStopwatch = Stopwatch.StartNew();
+        Stopwatch stageStopwatch = Stopwatch.StartNew();
         RecognitionContextResult contextBefore =
             _recognitionContextService.Build(controllerPosition);
         contextBefore = _correctionMemoryService?.Enrich(contextBefore) ??
             contextBefore;
+        double contextBeforeMs = stageStopwatch.Elapsed.TotalMilliseconds;
 
         contextProgress?.Report(contextBefore);
 
+        stageStopwatch.Restart();
         string transcript =
             await _speechRecognitionService.TranscribeAsync(
                 wavFilePath,
                 speechProgress,
                 contextBefore.Prompt,
                 cancellationToken);
+        double transcriptionMs = stageStopwatch.Elapsed.TotalMilliseconds;
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        stageStopwatch.Restart();
         RecognitionContextResult contextAfter =
             _recognitionContextService.Build(controllerPosition);
         contextAfter = _correctionMemoryService?.Enrich(contextAfter) ??
             contextAfter;
+        double contextAfterMs = stageStopwatch.Elapsed.TotalMilliseconds;
 
         contextProgress?.Report(contextAfter);
 
         return new SpeechWorkflowResult(
             transcript,
             contextBefore,
-            contextAfter);
+            contextAfter,
+            new SpeechWorkflowTimings(
+                contextBeforeMs,
+                transcriptionMs,
+                contextAfterMs,
+                totalStopwatch.Elapsed.TotalMilliseconds));
     }
 }
