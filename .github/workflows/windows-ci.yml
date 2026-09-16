@@ -130,10 +130,111 @@ jobs:
             -DestinationPath '.\artifacts\EatsVoiceCompanion-win-x64.zip' `
             -Force
 
+      - name: Install verified Inno Setup compiler
+        shell: pwsh
+        run: |
+          $downloadUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
+          $bootstrapper = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $installDir = Join-Path $env:RUNNER_TEMP 'InnoSetup7'
+
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $bootstrapper
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapper
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            throw "The Inno Setup bootstrapper signature is not valid: $($signature.StatusMessage)"
+          }
+
+          if ($signature.SignerCertificate.Subject -notmatch 'CN=Pyrsys B\.V\.') {
+            throw "Unexpected Inno Setup signer: $($signature.SignerCertificate.Subject)"
+          }
+
+          $process = Start-Process `
+            -FilePath $bootstrapper `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$installDir") `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+
+          if ($process.ExitCode -ne 0) {
+            throw "Inno Setup installation failed with exit code $($process.ExitCode)."
+          }
+
+          $compiler = Join-Path $installDir 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
+            throw 'The Inno Setup compiler was not installed.'
+          }
+
+          "INNO_COMPILER=$compiler" >> $env:GITHUB_ENV
+
+      - name: Create Windows installer
+        shell: pwsh
+        run: |
+          $publishDir = (Resolve-Path '.\artifacts\publish\win-x64').Path
+          $outputDir = (Resolve-Path '.\artifacts').Path
+          $project = [xml](Get-Content -LiteralPath '.\EatsVoiceCompanion.App\EatsVoiceCompanion.App.csproj' -Raw)
+          $version = [string]$project.Project.PropertyGroup.Version
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw 'The application version could not be read from the project file.'
+          }
+
+          & $env:INNO_COMPILER `
+            "--define=MyAppVersion=$version" `
+            "--define=PublishDir=$publishDir" `
+            "--define=OutputDir=$outputDir" `
+            '.\installer\EatsVoiceCompanion.iss'
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Smoke-test Windows installer
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path '.\artifacts\EatsVoiceCompanion-Setup-win-x64.exe').Path
+          $installDir = Join-Path $env:RUNNER_TEMP 'EatsVoiceCompanion-Installer-Smoke-Test'
+          $installProcess = Start-Process `
+            -FilePath $installer `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$installDir") `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+
+          if ($installProcess.ExitCode -ne 0) {
+            throw "The installer smoke test failed with exit code $($installProcess.ExitCode)."
+          }
+
+          $requiredFiles = @(
+            'EatsVoiceCompanion.App.exe',
+            'EatsVoiceCompanion.App.dll',
+            'EatsVoiceCompanion.Core.dll',
+            'runtimes\win-x64\whisper.dll'
+          )
+
+          foreach ($requiredFile in $requiredFiles) {
+            $installedPath = Join-Path $installDir $requiredFile
+            if (-not (Test-Path -LiteralPath $installedPath -PathType Leaf)) {
+              throw "The installed application is missing $requiredFile."
+            }
+          }
+
+          $uninstaller = Join-Path $installDir 'unins000.exe'
+          $uninstallProcess = Start-Process `
+            -FilePath $uninstaller `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+
+          if ($uninstallProcess.ExitCode -ne 0) {
+            throw "The installer uninstall test failed with exit code $($uninstallProcess.ExitCode)."
+          }
+
       - name: Validate release ZIP
         shell: pwsh
         run: |
           $zipPath = '.\artifacts\EatsVoiceCompanion-win-x64.zip'
+          $installerPath = '.\artifacts\EatsVoiceCompanion-Setup-win-x64.exe'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 
@@ -176,17 +277,20 @@ jobs:
             $archive.Dispose()
           }
 
-          $hash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
-          $size = (Get-Item -LiteralPath $zipPath).Length
-          "### Windows package" >> $env:GITHUB_STEP_SUMMARY
-          "- Size: $size bytes" >> $env:GITHUB_STEP_SUMMARY
-          "- SHA-256: ``$($hash.Hash)``" >> $env:GITHUB_STEP_SUMMARY
+          "### Windows packages" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($packagePath in @($installerPath, $zipPath)) {
+            $package = Get-Item -LiteralPath $packagePath
+            $hash = Get-FileHash -LiteralPath $packagePath -Algorithm SHA256
+            "- $($package.Name): $($package.Length) bytes; SHA-256 ``$($hash.Hash)``" >> $env:GITHUB_STEP_SUMMARY
+          }
 
-      - name: Upload Windows package
+      - name: Upload Windows packages
         uses: actions/upload-artifact@v7
         with:
           name: EatsVoiceCompanion-win-x64-${{ github.sha }}
-          path: .\artifacts\EatsVoiceCompanion-win-x64.zip
+          path: |
+            .\artifacts\EatsVoiceCompanion-Setup-win-x64.exe
+            .\artifacts\EatsVoiceCompanion-win-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -203,7 +307,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Download validated Windows package
+      - name: Download validated Windows packages
         uses: actions/download-artifact@v7
         with:
           name: EatsVoiceCompanion-win-x64-${{ github.sha }}
@@ -215,6 +319,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ github.ref_name }}'
+          $installerPath = '.\artifacts\release\EatsVoiceCompanion-Setup-win-x64.exe'
           $zipPath = '.\artifacts\release\EatsVoiceCompanion-win-x64.zip'
           $notesPath = ".\docs\release-notes\$tag.md"
           $finalNotes = Join-Path $env:RUNNER_TEMP "$tag-release-notes.md"
@@ -226,11 +331,14 @@ jobs:
             "# eATS Voice Companion $tag" | Set-Content $finalNotes
           }
 
-          $hash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
           Add-Content $finalNotes "`n## Package verification`n"
-          Add-Content $finalNotes "SHA-256: ``$($hash.Hash)``"
+          foreach ($packagePath in @($installerPath, $zipPath)) {
+            $package = Get-Item -LiteralPath $packagePath
+            $hash = Get-FileHash -LiteralPath $packagePath -Algorithm SHA256
+            Add-Content $finalNotes "- ``$($package.Name)``: ``$($hash.Hash)``"
+          }
 
-          gh release create $tag $zipPath `
+          gh release create $tag $installerPath $zipPath `
             --title "eATS Voice Companion $tag" `
             --notes-file $finalNotes `
             --verify-tag

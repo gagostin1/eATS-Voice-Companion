@@ -6,9 +6,12 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-15
+
 ### Added
 
-- Opted-in saved corrections automatically enter a local, content-deduplicated contribution outbox using the existing sanitized v2 schema, with in-app JSON preview, selective deletion, and batch export; nothing is uploaded automatically
+- A per-user Windows installer with Start Menu integration, optional desktop shortcut, clean in-place upgrades and uninstall support; the portable ZIP remains available
+- Opted-in saved corrections enter a content-deduplicated sanitized v2 outbox and send automatically to the project contribution service; failed sends retry locally, successful receipts are archived, and pending JSON can be inspected, deleted, exported, or retried manually
 - Live microphone meters and local WAV quality analysis detect empty audio, low levels, short recordings, and clipping; only genuinely silent recordings are skipped while marginal speech continues through best-effort recognition
 - Compact controller mode keeps recording, transcript, command, and immediate feedback controls in a small always-on-top view; minimizing moves the app to the system tray while global PTT remains active
 - A persistent **Always on top** setting keeps the companion visible above eATS and other applications
@@ -18,7 +21,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Local adaptive correction memory feeds reviewed phrases back into Whisper prompts and learns route-gated fix aliases without changing the bundled model
 - History controls show learned mappings and allow individual exclusions, attempt deletion, or clearing learned memory without deleting retained recordings
 - Visible creator and copyright attribution for Gus Agostinho in the application header, Settings page, assembly metadata, and project README
-- A first-run recognition-improvement notice with an enabled-by-default participation preference, an immediate opt-out, and a persistent Settings control; no data is uploaded automatically in this release
+- A versioned recognition-improvement consent notice clearly explains automatic sanitized correction uploads, provides an immediate opt-out, and requires existing users to acknowledge the changed behavior before pending reports can leave their computer
 - Local correction history for completed voice attempts, including correct/corrected review states, expected commands, saved recognition context, sanitized regression-case export, and non-staging WAV replay against the current recognizer
 
 ### Fixed
@@ -108,6 +111,7 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Active callsigns require an exact match against a fresh snapshot for verified status
 - Unknown commands, invalid values, control characters, and unsupported output tokens are rejected
 
-[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0

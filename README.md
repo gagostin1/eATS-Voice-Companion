@@ -6,7 +6,7 @@ eATS Voice Companion is an independent Windows app that turns spoken ATC instruc
 
 Created and maintained by **Gus Agostinho**.
 
-[Download v0.2.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.2.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md)
+[Download installer v0.3.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.3.0/EatsVoiceCompanion-Setup-win-x64.exe) · [Portable ZIP](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.3.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.3.0) · [Changelog](CHANGELOG.md)
 
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
 
@@ -34,14 +34,16 @@ Supported groups include headings, altitude and speed assignments, direct-to and
 
 Requires Windows 11 (x64), eATS, a microphone, the Microsoft Visual C++ 2022 Redistributable (x64), and a CPU with AVX, AVX2, FMA, and F16C support.
 
-1. Download `EatsVoiceCompanion-win-x64.zip` from the [latest release](https://github.com/gagostin1/eATS-Voice-Companion/releases/latest).
-2. Extract the entire archive to a normal folder.
-3. Run `EatsVoiceCompanion.App.exe`.
-4. Complete the first-run microphone, push-to-talk, and local voice calibration wizard. eATS does not need to be open for this step.
-5. Open **Settings**, confirm the eATS data directory, select **Detect eATS**, then **Save all settings**.
-6. Hold push-to-talk, speak, release, and review the staged command in eATS before pressing Enter.
+1. Download and run `EatsVoiceCompanion-Setup-win-x64.exe` from the [latest release](https://github.com/gagostin1/eATS-Voice-Companion/releases/latest). The installer adds a Start Menu shortcut and can optionally add a desktop shortcut.
+2. Complete the first-run microphone, push-to-talk, and local voice calibration wizard. eATS does not need to be open for this step.
+3. Open **Settings**, confirm the eATS data directory, select **Detect eATS**, then **Save all settings**.
+4. Hold push-to-talk, speak, release, and review the staged command in eATS before pressing Enter.
+
+For a no-install copy, download `EatsVoiceCompanion-win-x64.zip`, extract the entire archive to a normal folder, and run `EatsVoiceCompanion.App.exe`.
 
 The release is self-contained; no separate .NET installation is required. The Whisper model downloads on first use, so the first transcription needs an internet connection and takes longer than later ones.
+
+The installer is not yet code-signed, so Windows SmartScreen may display an unknown-publisher warning. Release checksums are listed in the GitHub release notes.
 
 ## Important behavior
 
