@@ -6,9 +6,18 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-05
+
 ### Added
 
 - A daily, non-blocking GitHub release check with an in-app update banner and a manual **Check for updates** action; downloads and installation always remain user initiated
+- Automatic final Enter for decoded voice commands, enabled by default with a Settings toggle; manual command generation remains stage-only
+- Structured timing diagnostics for model acquisition, context generation, Whisper decoding, command readiness, and eATS input
+
+### Changed
+
+- The Whisper model is warmed in the background and kept resident for the application session, eliminating repeated loading and substantially reducing command turnaround after startup
+- Voice submission rechecks that eATS still owns the foreground before pressing Enter and stops before submission if typing or focus validation fails
 
 ## [0.3.0] - 2026-09-15
 
@@ -115,7 +124,8 @@ The project uses semantic versioning. Pre-release builds may change as simulator
 - Active callsigns require an exact match against a fresh snapshot for verified status
 - Unknown commands, invalid values, control characters, and unsupported output tokens are rejected
 
-[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gagostin1/eATS-Voice-Companion/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.1.0

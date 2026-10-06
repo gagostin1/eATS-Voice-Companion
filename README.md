@@ -6,7 +6,7 @@ eATS Voice Companion is an independent Windows app that turns spoken ATC instruc
 
 Created and maintained by **Gus Agostinho**.
 
-[Download installer v0.3.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.3.0/EatsVoiceCompanion-Setup-win-x64.exe) · [Portable ZIP](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.3.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.3.0) · [Changelog](CHANGELOG.md)
+[Download installer v0.4.0](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.4.0/EatsVoiceCompanion-Setup-win-x64.exe) · [Portable ZIP](https://github.com/gagostin1/eATS-Voice-Companion/releases/download/v0.4.0/EatsVoiceCompanion-win-x64.zip) · [Release notes](https://github.com/gagostin1/eATS-Voice-Companion/releases/tag/v0.4.0) · [Changelog](CHANGELOG.md)
 
 [![Windows CI](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/gagostin1/eATS-Voice-Companion/actions/workflows/windows-ci.yml)
 
